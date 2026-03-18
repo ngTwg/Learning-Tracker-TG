@@ -74,6 +74,10 @@ async function handleMessage(message, sender) {
       await addToReviewList(message.vietnamese);
       return { ok: true };
 
+    case 'sm2_review':
+      await processSM2Review(message.vietnamese, message.quality);
+      return { ok: true };
+
     default:
       return { ok: false, error: `Unknown action: ${message.action}` };
   }
@@ -213,5 +217,36 @@ chrome.runtime.onInstalled.addListener((details) => {
     });
   } else if (details.reason === 'update') {
     console.log('[ThayGiap Tracker] Extension updated to', chrome.runtime.getManifest().version);
+  }
+
+  // Create an alarm to check for reviews every hour
+  chrome.alarms.create('checkReviewCount', { periodInMinutes: 60 });
+});
+
+// ============ Notifications & Spaced Repetition (SM-2) ============
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'checkReviewCount') {
+    try {
+      const reviews = await getReviewList();
+      if (reviews && reviews.length > 0) {
+        const data = await storageGet(['tg_last_notified']);
+        const lastNotified = data['tg_last_notified'];
+        const today = new Date().toDateString();
+
+        if (lastNotified !== today) {
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'icons/icon128.png',
+            title: '⏰ Đến giờ ôn tập rồi!',
+            message: `Hôm nay bạn có ${reviews.length} từ vựng cần ôn tập bằng Flashcards (SM-2). Hãy ôn ngay kẻo quên nhé!`,
+            priority: 2
+          });
+          await storageSet({ tg_last_notified: today });
+        }
+      }
+    } catch (err) {
+      console.error('[ThayGiap Tracker] Error checking review count:', err);
+    }
   }
 });

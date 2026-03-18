@@ -842,4 +842,36 @@
     }, 3000);
   }
 
+  // ============ Quick Add Feature (Alt+A) ============
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && e.code === 'KeyA') {
+      const activeEl = document.activeElement;
+      if (activeEl && activeEl.tagName === 'INPUT' && activeEl.dataset.tgTracked) {
+        e.preventDefault();
+        const inputId = activeEl.dataset.tgInputId;
+        const tracker = state.inputTrackers.get(inputId);
+        if (tracker && tracker.vietnamese) {
+          chrome.runtime.sendMessage({ action: 'add_to_review_list', vietnamese: tracker.vietnamese });
+          showToast(`Đã thêm "${tracker.vietnamese}" vào Danh sách Ôn tập!`);
+        }
+      }
+    }
+  });
+
+  function showToast(msg) {
+    const toast = document.createElement('div');
+    toast.textContent = msg;
+    toast.style.cssText = `
+      position: fixed; bottom: 80px; right: 20px; background: #10b981; color: white;
+      padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 999999; font-family: sans-serif; font-size: 14px; transition: opacity 0.3s;
+      font-weight: 600;
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
 })();

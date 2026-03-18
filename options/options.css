@@ -1461,5 +1461,40 @@ input[type="checkbox"]:checked::after {
 .rv-done-stat.stat-skip    .rv-done-stat-val { color: var(--accent-yellow); }
 .rv-done-stat.stat-accuracy .rv-done-stat-val { color: var(--accent-blue); }
 
+/* --- Added for Stage 1 Upgrades: Audio & Hotkeys --- */
+.btn-audio {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-color);
+  font-size: 16px;
+  outline: none;
+}
+.btn-audio:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary-light);
+  transform: scale(1.1);
+}
+.btn-audio:active {
+  transform: scale(0.95);
+}
 
-
+.key-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: 8px;
+  display: inline-block;
+  opacity: 0.8;
+  font-family: monospace;
+}

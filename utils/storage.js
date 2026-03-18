@@ -192,6 +192,11 @@ async function updateVocabSummary(vocabData) {
   // Update english if we got the correct answer
   if (vocabData.english && vocabData.english.trim()) {
     s.english = vocabData.english;
+    
+    // Auto-fetch IPA if missing
+    if (!s.ipa) {
+      fetchAndSaveIPA(s.english, key);
+    }
   }
 
   if (vocabData.isCorrect) {
@@ -239,46 +244,121 @@ async function updateVocabSummary(vocabData) {
 }
 
 /**
- * Get words in the review list (wrong ≥ 2 times and not yet mastered)
+ * Fetch IPA strictly from Free Dictionary API and save to storage
+ */
+async function fetchAndSaveIPA(english, key) {
+  try {
+    const word = english.split(' ')[0].replace(/[^a-zA-Z]/g, '');
+    if (!word) return;
+    
+    const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+    if (!res.ok) return;
+    
+    const data = await res.json();
+    let ipa = data[0]?.phonetic;
+    if (!ipa && data[0]?.phonetics) {
+      const ph = data[0].phonetics.find(p => p.text);
+      if (ph) ipa = ph.text;
+    }
+    
+    if (ipa) {
+      const d = await storageGet([STORAGE_KEYS.VOCAB_SUMMARY]);
+      const summaries = d[STORAGE_KEYS.VOCAB_SUMMARY] || {};
+      if (summaries[key]) {
+        summaries[key].ipa = ipa;
+        await storageSet({ [STORAGE_KEYS.VOCAB_SUMMARY]: summaries });
+      }
+    }
+  } catch (error) {
+    console.log('[ThayGiap Tracker] fetch IPA error:', error);
+  }
+}
+
+/**
+ * Get words in the review list (wrong >= 1 time, or due for spaced repetition)
  */
 async function getReviewList() {
   const summaries = await getVocabSummaries();
-  return Object.values(summaries).filter(s =>
-    s.inReviewList && s.mastery !== 'mastered'
-  );
+  const now = Date.now();
+  return Object.values(summaries).filter(s => {
+    // Exclude mastered unless they are specifically due
+    if (s.mastery === 'mastered') return false;
+    
+    // Include if manually marked for review or due by SM-2
+    const isDue = s.nextReviewDate ? s.nextReviewDate <= now : false;
+    return s.inReviewList || isDue;
+  });
+}
+/**
+ * Process a review according to the SM-2 algorithm (Spaced Repetition)
+ * @param {string} vietnamese
+ * @param {number} quality (0-5)
+ */
+async function processSM2Review(vietnamese, quality) {
+  const data = await storageGet([STORAGE_KEYS.VOCAB_SUMMARY]);
+  const summaries = data[STORAGE_KEYS.VOCAB_SUMMARY] || {};
+  const key = vietnamese.toLowerCase().trim();
+  const s = summaries[key];
+  if (!s) return;
+
+  // Initialize SM-2 parameters if not present
+  if (s.efactor === undefined) s.efactor = 2.5;
+  if (s.repetition === undefined) s.repetition = 0;
+  if (s.interval === undefined) s.interval = 0;
+
+  // Calculate new SM-2 values
+  if (quality >= 3) {
+    if (s.repetition === 0) {
+      s.interval = 1;
+    } else if (s.repetition === 1) {
+      s.interval = 6;
+    } else {
+      s.interval = Math.round(s.interval * s.efactor);
+    }
+    s.repetition++;
+  } else {
+    s.repetition = 0;
+    s.interval = 1;
+  }
+
+  s.efactor = s.efactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+  if (s.efactor < 1.3) s.efactor = 1.3;
+
+  s.nextReviewDate = Date.now() + s.interval * 24 * 60 * 60 * 1000;
+
+  // Sync back to traditional stats
+  if (quality >= 3) {
+    s.inReviewList = false;
+    s.streakCorrect = (s.streakCorrect || 0) + 1;
+  } else {
+    s.inReviewList = true;
+    s.streakCorrect = 0;
+    s.wrongAttempts = (s.wrongAttempts || 0) + 1;
+  }
+
+  // Upgrade mastery if earned based on SM-2
+  if (s.interval > 21) s.mastery = 'mastered';
+  else if (s.interval > 7) s.mastery = 'reviewing';
+  else s.mastery = 'learning';
+
+  await storageSet({ [STORAGE_KEYS.VOCAB_SUMMARY]: summaries });
 }
 
 /**
  * Mark a word as correctly answered in review → remove from review list
+ * Keeping for backward compatibility but mapping to SM-2
  * @param {string} vietnamese
  */
 async function markReviewCorrect(vietnamese) {
-  const data = await storageGet([STORAGE_KEYS.VOCAB_SUMMARY]);
-  const summaries = data[STORAGE_KEYS.VOCAB_SUMMARY] || {};
-  const key = vietnamese.toLowerCase().trim();
-  if (summaries[key]) {
-    summaries[key].inReviewList = false;
-    summaries[key].streakCorrect = (summaries[key].streakCorrect || 0) + 1;
-    // Upgrade mastery if earned
-    if (summaries[key].streakCorrect >= 3) summaries[key].mastery = 'mastered';
-    else if (summaries[key].streakCorrect >= 2) summaries[key].mastery = 'reviewing';
-    else summaries[key].mastery = 'learning';
-    await storageSet({ [STORAGE_KEYS.VOCAB_SUMMARY]: summaries });
-  }
+  await processSM2Review(vietnamese, 4); // Default to quality 4
 }
 
 /**
- * Re-add a word back to review list manually
+ * Re-add a word back to review list manually or record a wrong review
  * @param {string} vietnamese
  */
 async function addToReviewList(vietnamese) {
-  const data = await storageGet([STORAGE_KEYS.VOCAB_SUMMARY]);
-  const summaries = data[STORAGE_KEYS.VOCAB_SUMMARY] || {};
-  const key = vietnamese.toLowerCase().trim();
-  if (summaries[key]) {
-    summaries[key].inReviewList = true;
-    await storageSet({ [STORAGE_KEYS.VOCAB_SUMMARY]: summaries });
-  }
+  await processSM2Review(vietnamese, 0); // Default to quality 0 (wrong)
 }
 
 /**

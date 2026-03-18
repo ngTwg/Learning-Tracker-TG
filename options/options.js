@@ -494,11 +494,16 @@ function setupRvSettings() {
 
   // Reveal mode
   document.getElementById('fc-reveal-btn')?.addEventListener('click', () => {
-    const ans = rvQueue[rvCurIdx]?.direction === 'en-vi'
-      ? rvQueue[rvCurIdx]?.word?.vietnamese
-      : rvQueue[rvCurIdx]?.word?.english;
+    const word = rvQueue[rvCurIdx]?.word;
+    const isEnVi = rvQueue[rvCurIdx]?.direction === 'en-vi';
+    const ans = isEnVi ? word?.vietnamese : word?.english;
+    const ipa = (!isEnVi && word?.ipa) ? word.ipa : null;
+    
     const ra = document.getElementById('fc-reveal-answer');
-    if (ra) { ra.textContent = ans || '?'; ra.style.display = 'block'; }
+    if (ra) { 
+      ra.innerHTML = `${escapeHtml(ans || '?')} ${ipa ? `<div style="font-size:16px; font-style:italic; color:var(--text-muted); margin-top:4px; font-weight:normal;">/${escapeHtml(ipa)}/</div>` : ''}`; 
+      ra.style.display = 'block'; 
+    }
     document.getElementById('fc-reveal-btn').style.display = 'none';
     const sj = document.getElementById('fc-self-judge');
     if (sj) sj.style.display = 'flex';
@@ -506,6 +511,8 @@ function setupRvSettings() {
   document.getElementById('fc-judge-correct')?.addEventListener('click', () => rvRevealJudge(true));
   document.getElementById('fc-judge-wrong')?.addEventListener('click',   () => rvRevealJudge(false));
   document.getElementById('fc-skip-reveal')?.addEventListener('click', () => rvSkip());
+
+  setupRvShortcuts();
 }
 
 // ─── Build queue from settings ───────────────────────────────────────
@@ -633,6 +640,7 @@ function renderRvCard() {
       ].join('');
     }
     showRvPanel('done');
+    fireConfetti();
     return;
   }
 
@@ -642,13 +650,29 @@ function renderRvCard() {
   // Direction label + question word
   const labelEl = document.getElementById('fc-direction-label');
   const fcWord  = document.getElementById('fc-vietnamese');
+  const ipaEl   = document.getElementById('fc-ipa');
+  
   if (direction === 'en-vi') {
     if (labelEl) labelEl.textContent = 'Tiếng Anh (nghĩa là gì?)';
     if (fcWord)  fcWord.textContent   = word.english || '';
+    if (ipaEl) {
+      if (word.ipa) { ipaEl.textContent = `/${word.ipa}/`; ipaEl.style.display = 'block'; }
+      else { ipaEl.style.display = 'none'; }
+    }
   } else {
     if (labelEl) labelEl.textContent = 'Nghĩa tiếng Việt';
     if (fcWord)  fcWord.textContent   = word.vietnamese || '';
+    if (ipaEl)   ipaEl.style.display  = 'none';
   }
+
+  const audioBtn = document.getElementById('fc-audio');
+  if (audioBtn) {
+    audioBtn.onclick = () => playAudio(
+      direction === 'en-vi' ? word.english : word.vietnamese,
+      direction === 'en-vi' ? 'en-US' : 'vi-VN'
+    );
+  }
+
 
   const wrongBadge = document.getElementById('fc-wrong-count');
   if (wrongBadge) wrongBadge.textContent = word.wrongAttempts > 0 ? `✗ đã sai ${word.wrongAttempts} lần` : '';
@@ -719,13 +743,17 @@ function checkRvTypeAnswer() {
   input.disabled = true;
 
   if (isCorrect) {
+    const ipaStr = (direction === 'vi-en' && word.ipa) ? `<span style="font-style:italic;color:var(--text-muted);margin-left:8px;font-weight:normal;">/${escapeHtml(word.ipa)}/</span>` : '';
     input.classList.add('fc-correct');
     feedback.className = 'fc-feedback correct-fb';
-    feedback.innerHTML = `✅ Chính xác! <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>`;
+    feedback.innerHTML = `✅ Chính xác! <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
     feedback.style.display = 'block';
     rvSessionStats.correct++;
     if (!rvDoneIdx.has(rvCurIdx)) rvDoneIdx.add(rvCurIdx);
-    sendMessage({ action: 'mark_review_correct', vietnamese: word.vietnamese });
+    if (!rvQueue[rvCurIdx].graded) {
+      sendMessage({ action: 'sm2_review', vietnamese: word.vietnamese, quality: 4 });
+      rvQueue[rvCurIdx].graded = true;
+    }
 
     const cb = document.getElementById('fc-check');
     if (cb) { cb.textContent = '→ Tiếp theo'; cb.onclick = rvNextCard; }
@@ -735,11 +763,16 @@ function checkRvTypeAnswer() {
       rvAutoTimer = setTimeout(rvNextCard, rvSettings.autoAdvance);
     }
   } else {
+    const ipaStr = (direction === 'vi-en' && word.ipa) ? `<span style="font-style:italic;color:var(--text-muted);margin-left:8px;font-weight:normal;">/${escapeHtml(word.ipa)}/</span>` : '';
     input.classList.add('fc-wrong');
     feedback.className = 'fc-feedback wrong-fb';
-    feedback.innerHTML = `❌ Sai! Đáp án: <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>`;
+    feedback.innerHTML = `❌ Sai! Đáp án: <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
     feedback.style.display = 'block';
     rvSessionStats.wrong++;
+    if (!rvQueue[rvCurIdx].graded) {
+      sendMessage({ action: 'sm2_review', vietnamese: word.vietnamese, quality: 1 });
+      rvQueue[rvCurIdx].graded = true;
+    }
     updateRvSessionBar();
 
     const cb = document.getElementById('fc-check');
@@ -772,6 +805,7 @@ function renderChoice4(word, direction) {
 
   grid.innerHTML = options.map((opt, i) => `
     <button class="fc-choice-btn" data-idx="${i}" onclick="handleChoice4('${escapeHtml(opt)}', '${escapeHtml(correct)}')">
+      <span class="key-hint" style="margin-right:8px; margin-left:0;">${i+1}</span>
       ${escapeHtml(opt)}
     </button>`).join('');
 }
@@ -793,9 +827,16 @@ window.handleChoice4 = function(selected, correct) {
   if (isCorrect) {
     rvSessionStats.correct++;
     if (!rvDoneIdx.has(rvCurIdx)) rvDoneIdx.add(rvCurIdx);
-    sendMessage({ action: 'mark_review_correct', vietnamese: word.vietnamese });
+    if (!rvQueue[rvCurIdx].graded) {
+      sendMessage({ action: 'sm2_review', vietnamese: word.vietnamese, quality: 4 });
+      rvQueue[rvCurIdx].graded = true;
+    }
   } else {
     rvSessionStats.wrong++;
+    if (!rvQueue[rvCurIdx].graded) {
+      sendMessage({ action: 'sm2_review', vietnamese: word.vietnamese, quality: 1 });
+      rvQueue[rvCurIdx].graded = true;
+    }
   }
   updateRvSessionBar();
 
@@ -809,9 +850,16 @@ function rvRevealJudge(remembered) {
   if (remembered) {
     rvSessionStats.correct++;
     if (!rvDoneIdx.has(rvCurIdx)) rvDoneIdx.add(rvCurIdx);
-    sendMessage({ action: 'mark_review_correct', vietnamese: word.vietnamese });
+    if (!rvQueue[rvCurIdx].graded) {
+      sendMessage({ action: 'sm2_review', vietnamese: word.vietnamese, quality: 4 });
+      rvQueue[rvCurIdx].graded = true;
+    }
   } else {
     rvSessionStats.wrong++;
+    if (!rvQueue[rvCurIdx].graded) {
+      sendMessage({ action: 'sm2_review', vietnamese: word.vietnamese, quality: 1 });
+      rvQueue[rvCurIdx].graded = true;
+    }
   }
   updateRvSessionBar();
   const delay = rvSettings.autoAdvance > 0 ? rvSettings.autoAdvance : 900;
@@ -870,6 +918,98 @@ function levenshtein(a, b) {
     }
   }
   return dp[m][n];
+}
+
+// --- Stage 1 Upgrades: Audio, Gamification & Hotkeys ---
+function playAudio(text, lang) {
+  if (!text || !window.speechSynthesis) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = lang;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
+}
+
+function fireConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth;
+  canvas.height = canvas.parentElement.clientHeight;
+
+  const pieces = [];
+  const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4CAF50', '#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#FF5722'];
+
+  for (let i = 0; i < 100; i++) {
+    pieces.push({
+      x: canvas.width / 2,
+      y: canvas.height / 2 + 50,
+      vx: (Math.random() - 0.5) * 20,
+      vy: (Math.random() - 1) * 20 - 5,
+      size: Math.random() * 10 + 5,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      rotation: Math.random() * 360,
+      rotationSpeed: (Math.random() - 0.5) * 10
+    });
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let active = false;
+    pieces.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.5; // gravity
+      p.rotation += p.rotationSpeed;
+      if (p.y < canvas.height) active = true;
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation * Math.PI / 180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+      ctx.restore();
+    });
+
+    if (active) requestAnimationFrame(animate);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  animate();
+}
+
+function setupRvShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // Only act if Review Flashcard is visible
+    const fc = document.getElementById('review-flashcard');
+    if (!fc || fc.style.display === 'none') return;
+    
+    // Ignore if user is typing in input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    if (rvSettings.mode === 'reveal') {
+      const revealBtn = document.getElementById('fc-reveal-btn');
+      const sjGroup = document.getElementById('fc-self-judge');
+      
+      if (e.code === 'Space' || e.key === 'Enter') {
+        e.preventDefault();
+        // If reveal button is visible, click it
+        if (revealBtn && revealBtn.style.display !== 'none') {
+          revealBtn.click();
+        } else if (sjGroup && sjGroup.style.display !== 'none') {
+          document.getElementById('fc-judge-correct')?.click();
+        }
+      } else if (sjGroup && sjGroup.style.display !== 'none') {
+        if (e.key === '1') { e.preventDefault(); document.getElementById('fc-judge-wrong')?.click(); }
+        if (e.key === '2') { e.preventDefault(); document.getElementById('fc-judge-correct')?.click(); }
+      }
+    } else if (rvSettings.mode === 'choice4') {
+      if (['1', '2', '3', '4'].includes(e.key)) {
+        e.preventDefault();
+        const btns = document.querySelectorAll('.fc-choice-btn');
+        const idx = parseInt(e.key) - 1;
+        if (btns[idx] && !btns[idx].disabled) btns[idx].click();
+      }
+    }
+  });
 }
 
 // ============ Sessions Tab ============
