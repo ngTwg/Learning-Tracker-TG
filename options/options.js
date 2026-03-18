@@ -667,19 +667,25 @@ function renderRvCard() {
 
   const audioBtn = document.getElementById('fc-audio');
   if (audioBtn) {
-    audioBtn.onclick = () => playAudio(
-      direction === 'en-vi' ? word.english : word.vietnamese,
-      direction === 'en-vi' ? 'en-US' : 'vi-VN'
-    );
+    if (direction === 'en-vi') {
+      audioBtn.style.display = ''; // or block/flex depending on parent
+      audioBtn.onclick = () => playAudio(word.english, 'en-US');
+    } else {
+      audioBtn.style.display = 'none';
+      audioBtn.onclick = null;
+    }
   }
 
 
   const wrongBadge = document.getElementById('fc-wrong-count');
   if (wrongBadge) wrongBadge.textContent = word.wrongAttempts > 0 ? `✗ đã sai ${word.wrongAttempts} lần` : '';
 
-  // Reset hint
+  // Reset hint and feedback
   const hintEl = document.getElementById('fc-hint');
   if (hintEl) hintEl.textContent = '';
+  
+  const fb = document.getElementById('fc-feedback');
+  if (fb) fb.style.display = 'none';
 
   // Mode-specific UI
   const typeArea    = document.getElementById('fc-type-area');
@@ -691,8 +697,6 @@ function renderRvCard() {
     if (typeArea) typeArea.style.display = '';
     const inp = document.getElementById('fc-input');
     if (inp) { inp.value = ''; inp.className = 'fc-input'; inp.disabled = false; setTimeout(() => inp.focus(), 80); }
-    const fb = document.getElementById('fc-feedback');
-    if (fb) fb.style.display = 'none';
     const cb = document.getElementById('fc-check');
     if (cb) { cb.textContent = '✓ Kiểm tra'; cb.onclick = checkRvTypeAnswer; }
 
@@ -803,26 +807,40 @@ function renderChoice4(word, direction) {
   const distractors = shuffleArray(allWords).slice(0, 3).map(w => direction === 'en-vi' ? w.vietnamese : w.english);
   const options = shuffleArray([correct, ...distractors]);
 
-  grid.innerHTML = options.map((opt, i) => `
-    <button class="fc-choice-btn" data-idx="${i}" onclick="handleChoice4('${escapeHtml(opt)}', '${escapeHtml(correct)}')">
+  grid.innerHTML = options.map((opt, i) => {
+    const safeOpt = escapeHtml(opt).replace(/"/g, '&quot;');
+    return `
+    <button class="fc-choice-btn" data-idx="${i}" data-val="${safeOpt}">
       <span class="key-hint" style="margin-right:8px; margin-left:0;">${i+1}</span>
       ${escapeHtml(opt)}
-    </button>`).join('');
+    </button>`;
+  }).join('');
+
+  document.querySelectorAll('.fc-choice-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      handleChoice4(this.dataset.val, correct);
+    });
+  });
 }
 
 window.handleChoice4 = function(selected, correct) {
   const isCorrect = selected.trim().toLowerCase() === correct.trim().toLowerCase();
-  const { word } = rvQueue[rvCurIdx];
+  const { word, direction } = rvQueue[rvCurIdx];
 
   // Disable all buttons and highlight
   document.querySelectorAll('.fc-choice-btn').forEach(btn => {
     btn.disabled = true;
-    if (btn.textContent.trim().toLowerCase() === correct.trim().toLowerCase()) {
+    const btnVal = btn.dataset.val || '';
+    if (btnVal.trim().toLowerCase() === correct.trim().toLowerCase()) {
       btn.classList.add('correct-choice');
-    } else if (btn.textContent.trim() === selected && !isCorrect) {
+    } else if (btnVal.trim().toLowerCase() === selected.trim().toLowerCase() && !isCorrect) {
       btn.classList.add('wrong-choice');
     }
   });
+
+  const feedback = document.getElementById('fc-feedback');
+  const correctRaw = direction === 'en-vi' ? word.vietnamese : word.english;
+  const ipaStr = (direction === 'vi-en' && word.ipa) ? `<span style="font-style:italic;color:var(--text-muted);margin-left:8px;font-weight:normal;">/${escapeHtml(word.ipa)}/</span>` : '';
 
   if (isCorrect) {
     rvSessionStats.correct++;
@@ -831,11 +849,23 @@ window.handleChoice4 = function(selected, correct) {
       sendMessage({ action: 'sm2_review', vietnamese: word.vietnamese, quality: 4 });
       rvQueue[rvCurIdx].graded = true;
     }
+    
+    if (feedback) {
+      feedback.className = 'fc-feedback correct-fb';
+      feedback.innerHTML = `✅ Chính xác! <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
+      feedback.style.display = 'block';
+    }
   } else {
     rvSessionStats.wrong++;
     if (!rvQueue[rvCurIdx].graded) {
       sendMessage({ action: 'sm2_review', vietnamese: word.vietnamese, quality: 1 });
       rvQueue[rvCurIdx].graded = true;
+    }
+
+    if (feedback) {
+      feedback.className = 'fc-feedback wrong-fb';
+      feedback.innerHTML = `❌ Sai! Đáp án: <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
+      feedback.style.display = 'block';
     }
   }
   updateRvSessionBar();
