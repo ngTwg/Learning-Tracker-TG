@@ -1,0 +1,217 @@
+/**
+ * ThayGiap Learning Tracker - Background Service Worker
+ * ======================================================
+ * Receives messages from content.js, saves events, and computes summaries.
+ */
+
+// Import storage utilities (non-module service worker)
+try {
+  importScripts('utils/storage.js');
+} catch (e) {
+  console.error('[ThayGiap Tracker] Failed to import storage.js:', e);
+}
+
+console.log('[ThayGiap Tracker] Background service worker started');
+
+// ============ Message Handler ============
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || !message.action) {
+    sendResponse({ ok: false, error: 'Invalid message' });
+    return true;
+  }
+
+  handleMessage(message, sender)
+    .then(result => sendResponse(result))
+    .catch(err => {
+      console.error('[ThayGiap Tracker] Error handling message:', err);
+      sendResponse({ ok: false, error: err.message });
+    });
+
+  return true; // Keep sendResponse channel open for async
+});
+
+async function handleMessage(message, sender) {
+  switch (message.action) {
+    case 'log_event':
+      return handleLogEvent(message.payload);
+
+    case 'get_today_stats':
+      return { ok: true, data: await getTodayStats() };
+
+    case 'get_weekly_stats':
+      return { ok: true, data: await getWeeklyStats() };
+
+    case 'get_vocab_summaries':
+      return { ok: true, data: await getVocabSummaries() };
+
+    case 'get_session_summaries':
+      return { ok: true, data: await getSessionSummaries() };
+
+    case 'get_events':
+      return { ok: true, data: await getEvents(message.filters || {}) };
+
+    case 'export_data':
+      return { ok: true, data: await exportAllData() };
+
+    case 'clear_data':
+      await clearAllData();
+      return { ok: true };
+
+    case 'get_settings':
+      return { ok: true, data: await getSettings() };
+
+    case 'update_settings':
+      return { ok: true, data: await updateSettings(message.settings) };
+
+    case 'get_review_list':
+      return { ok: true, data: await getReviewList() };
+
+    case 'mark_review_correct':
+      await markReviewCorrect(message.vietnamese);
+      return { ok: true };
+
+    case 'add_to_review_list':
+      await addToReviewList(message.vietnamese);
+      return { ok: true };
+
+    default:
+      return { ok: false, error: `Unknown action: ${message.action}` };
+  }
+}
+
+// ============ Event Processing ============
+
+async function handleLogEvent(payload) {
+  if (!payload || !payload.type) {
+    return { ok: false, error: 'Invalid payload' };
+  }
+
+  // Save raw event
+  const savedEvent = await saveEvent(payload);
+
+  // Process specific event types
+  switch (payload.type) {
+    case 'answer_result':
+      await processAnswerResult(payload);
+      break;
+
+    case 'submit_click':
+      await processSubmitClick(payload);
+      break;
+
+    case 'score_detected':
+      await processScoreDetected(payload);
+      break;
+
+    case 'lesson_open':
+      await processLessonOpen(payload);
+      break;
+  }
+
+  return { ok: true, event: savedEvent };
+}
+
+async function processAnswerResult(payload) {
+  const data = payload.data || {};
+  const context = payload.context || {};
+
+  // Update vocab summary
+  if (data.vietnamese) {
+    await updateVocabSummary({
+      vietnamese: data.vietnamese,
+      english: data.isCorrect ? data.userInput : (data.correctAnswer || data.english || ''),
+      userInput: data.userInput || '',      // ← pass what user typed
+      correctAnswer: data.correctAnswer || '',
+      isCorrect: data.isCorrect,
+      attemptNumber: data.attemptNumber || 1
+    });
+  }
+
+  // Update session summary
+  if (context.lessonTitle) {
+    const lessonKey = `${context.url || ''}|${context.lessonTitle}|${context.partType || 'unknown'}|${context.currentItem || ''}`;
+    await updateSessionSummary({
+      lessonKey,
+      lessonTitle: context.lessonTitle,
+      sessionTitle: context.sessionTitle,
+      partType: context.partType,
+      currentItem: context.currentItem,
+      correct: data.isCorrect ? 1 : 0,
+      wrong: data.isCorrect ? 0 : 1
+    });
+  }
+}
+
+async function processSubmitClick(payload) {
+  const context = payload.context || {};
+  const data = payload.data || {};
+
+  if (context.lessonTitle) {
+    const lessonKey = `${context.url || ''}|${context.lessonTitle}|${context.partType || 'unknown'}|${context.currentItem || ''}`;
+    await updateSessionSummary({
+      lessonKey,
+      lessonTitle: context.lessonTitle,
+      sessionTitle: context.sessionTitle,
+      partType: context.partType,
+      currentItem: context.currentItem
+    });
+  }
+}
+
+async function processScoreDetected(payload) {
+  const context = payload.context || {};
+  const data = payload.data || {};
+
+  if (context.lessonTitle && data.score !== undefined) {
+    const lessonKey = `${context.url || ''}|${context.lessonTitle}|test|${context.currentItem || ''}`;
+    await updateSessionSummary({
+      lessonKey,
+      lessonTitle: context.lessonTitle,
+      sessionTitle: context.sessionTitle,
+      partType: 'test',
+      currentItem: context.currentItem,
+      score: data.score
+    });
+  }
+}
+
+async function processLessonOpen(payload) {
+  const context = payload.context || {};
+
+  if (context.lessonTitle) {
+    const lessonKey = `${context.url || ''}|${context.lessonTitle}|${context.partType || 'unknown'}|${context.currentItem || ''}`;
+    await updateSessionSummary({
+      lessonKey,
+      lessonTitle: context.lessonTitle,
+      sessionTitle: context.sessionTitle,
+      partType: context.partType,
+      currentItem: context.currentItem
+    });
+  }
+}
+
+// ============ Tab/Navigation Tracking ============
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url && tab.url.includes('thaygiap.com')) {
+    // Notify content script about page load
+    chrome.tabs.sendMessage(tabId, { action: 'page_loaded', url: tab.url })
+      .catch(() => {
+        // Content script not yet ready, ignore
+      });
+  }
+});
+
+// ============ Extension Install/Update ============
+
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    console.log('[ThayGiap Tracker] Extension installed!');
+    // Set default settings
+    storageSet({
+      [STORAGE_KEYS.SETTINGS]: DEFAULT_SETTINGS
+    });
+  } else if (details.reason === 'update') {
+    console.log('[ThayGiap Tracker] Extension updated to', chrome.runtime.getManifest().version);
+  }
+});

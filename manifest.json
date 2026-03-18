@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "ThayGiap Learning Tracker",
+  "version": "1.0.0",
+  "description": "Theo dõi quá trình học và làm bài trên hệ thống Thầy Giáp ENGLISH. Ghi nhận từ vựng đúng/sai, số lần sai, điểm kiểm tra, lịch sử luyện tập.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://thaygiap.com/*",
+    "http://thaygiap.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://thaygiap.com/*",
+        "http://thaygiap.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

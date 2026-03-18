@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ThayGiap Tracker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="popup-header">
+      <div class="logo-row">
+        <span class="logo-icon">📚</span>
+        <div>
+          <h1 class="logo-title">ThayGiap Tracker</h1>
+          <span class="logo-subtitle">Learning Progress</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-toggle-tracking" class="btn-icon" title="Bật/Tắt tracking">
+          <span id="tracking-icon">🟢</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Today Stats Card -->
+    <div class="stats-card primary">
+      <div class="stats-card-header">
+        <span class="stats-emoji">📊</span>
+        <span class="stats-label">Hôm nay</span>
+        <span id="today-date" class="stats-date"></span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value" id="total-attempts">0</div>
+          <div class="stat-name">Lượt làm</div>
+        </div>
+        <div class="stat-item correct">
+          <div class="stat-value" id="correct-count">0</div>
+          <div class="stat-name">Đúng</div>
+        </div>
+        <div class="stat-item wrong">
+          <div class="stat-value" id="wrong-count">0</div>
+          <div class="stat-name">Sai</div>
+        </div>
+        <div class="stat-item accent">
+          <div class="stat-value" id="accuracy">0%</div>
+          <div class="stat-name">Chính xác</div>
+        </div>
+      </div>
+      <!-- Accuracy Bar -->
+      <div class="accuracy-bar-container">
+        <div class="accuracy-bar">
+          <div class="accuracy-fill" id="accuracy-bar" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Words Summary -->
+    <div class="stats-card secondary">
+      <div class="stats-card-header">
+        <span class="stats-emoji">📝</span>
+        <span class="stats-label">Từ vựng</span>
+        <span id="words-count" class="stats-badge">0</span>
+      </div>
+      <div id="words-mastery" class="mastery-grid">
+        <div class="mastery-item new-word">
+          <span class="mastery-dot"></span>
+          <span class="mastery-label">Mới</span>
+          <span class="mastery-count" id="mastery-new">0</span>
+        </div>
+        <div class="mastery-item learning">
+          <span class="mastery-dot"></span>
+          <span class="mastery-label">Đang học</span>
+          <span class="mastery-count" id="mastery-learning">0</span>
+        </div>
+        <div class="mastery-item reviewing">
+          <span class="mastery-dot"></span>
+          <span class="mastery-label">Ôn tập</span>
+          <span class="mastery-count" id="mastery-reviewing">0</span>
+        </div>
+        <div class="mastery-item mastered">
+          <span class="mastery-dot"></span>
+          <span class="mastery-label">Thành thạo</span>
+          <span class="mastery-count" id="mastery-mastered">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Wrong Words -->
+    <div class="stats-card">
+      <div class="stats-card-header">
+        <span class="stats-emoji">⚠️</span>
+        <span class="stats-label">Sai nhiều nhất</span>
+      </div>
+      <div id="top-wrong-words" class="word-list">
+        <div class="empty-state">Chưa có dữ liệu</div>
+      </div>
+    </div>
+
+    <!-- Recent Sessions -->
+    <div class="stats-card">
+      <div class="stats-card-header">
+        <span class="stats-emoji">🕐</span>
+        <span class="stats-label">Gần đây</span>
+      </div>
+      <div id="recent-sessions" class="session-list">
+        <div class="empty-state">Chưa có phiên học</div>
+      </div>
+    </div>
+
+    <!-- Footer Actions -->
+    <footer class="popup-footer">
+      <button id="btn-options" class="btn-secondary">
+        <span>⚙️</span> Chi tiết
+      </button>
+      <button id="btn-export" class="btn-secondary">
+        <span>📤</span> Export
+      </button>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
