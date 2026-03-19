@@ -14,6 +14,8 @@ try {
 console.log('[ThayGiap Tracker] Background service worker started');
 
 const CONTEXT_MENU_ADD_REVIEW = 'tg-add-selection-review';
+const examLockByWindow = new Map(); // windowId -> { tabId, updatedAt }
+const examLockNotifyByTab = new Map(); // tabId -> timestamp
 
 // ============ Message Handler ============
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -85,9 +87,128 @@ async function handleMessage(message, sender) {
     case 'import_anki_rows':
       return { ok: true, data: await importAnkiRows(message.rows || []) };
 
+    case 'exam_lock_update':
+      return handleExamLockUpdate(message, sender);
+
     default:
       return { ok: false, error: `Unknown action: ${message.action}` };
   }
+}
+
+function isThayGiapUrl(url) {
+  return typeof url === 'string' && /https?:\/\/([^/]+\.)?thaygiap\.com\//i.test(url);
+}
+
+function clearExamLockForWindow(windowId) {
+  if (typeof windowId !== 'number') return;
+  const locked = examLockByWindow.get(windowId);
+  if (locked) {
+    examLockNotifyByTab.delete(locked.tabId);
+  }
+  examLockByWindow.delete(windowId);
+}
+
+function clearExamLockForTab(tabId) {
+  if (typeof tabId !== 'number') return;
+  for (const [windowId, lock] of examLockByWindow.entries()) {
+    if (lock.tabId === tabId) {
+      clearExamLockForWindow(windowId);
+      break;
+    }
+  }
+}
+
+async function handleExamLockUpdate(message, sender) {
+  const tab = sender?.tab;
+  if (!tab || typeof tab.id !== 'number' || typeof tab.windowId !== 'number') {
+    return { ok: false, error: 'Missing sender tab' };
+  }
+
+  if (!isThayGiapUrl(tab.url || message?.context?.url || '')) {
+    clearExamLockForTab(tab.id);
+    return { ok: true, active: false };
+  }
+
+  if (message.active) {
+    examLockByWindow.set(tab.windowId, {
+      tabId: tab.id,
+      updatedAt: Date.now()
+    });
+    return { ok: true, active: true };
+  }
+
+  const current = examLockByWindow.get(tab.windowId);
+  if (current && current.tabId === tab.id) {
+    clearExamLockForWindow(tab.windowId);
+  }
+  return { ok: true, active: false };
+}
+
+async function notifyExamLockViolation(tabId, reason) {
+  const now = Date.now();
+  const last = examLockNotifyByTab.get(tabId) || 0;
+  if ((now - last) < 600) return;
+  examLockNotifyByTab.set(tabId, now);
+
+  let message = 'Bạn vừa rời tab kiểm tra. Đã quay lại bài test.';
+  if (reason === 'background_new_tab') {
+    message = 'Đã chặn mở tab mới trong lúc đang làm bài kiểm tra.';
+  }
+
+  await chrome.tabs.sendMessage(tabId, {
+    action: 'exam_lock_violation',
+    reason,
+    message
+  }).catch(() => {});
+}
+
+function getPrimaryExamLock() {
+  let selected = null;
+  for (const [windowId, lock] of examLockByWindow.entries()) {
+    if (!selected || (lock.updatedAt || 0) > (selected.lock.updatedAt || 0)) {
+      selected = { windowId, lock };
+    }
+  }
+  return selected;
+}
+
+async function ensurePrimaryLockAvailable() {
+  const primary = getPrimaryExamLock();
+  if (!primary) return null;
+
+  const tab = await chrome.tabs.get(primary.lock.tabId).catch(() => null);
+  if (!tab || !isThayGiapUrl(tab.url || '')) {
+    clearExamLockForWindow(primary.windowId);
+    return null;
+  }
+
+  return primary;
+}
+
+async function enforceExamLockForActivatedTab(activeInfo) {
+  const { tabId } = activeInfo || {};
+  if (typeof tabId !== 'number') return;
+
+  const primary = await ensurePrimaryLockAvailable();
+  if (!primary) return;
+  if (primary.lock.tabId === tabId) return;
+
+  await chrome.tabs.update(primary.lock.tabId, { active: true }).catch(() => {});
+  await chrome.windows.update(primary.windowId, { focused: true }).catch(() => {});
+  await notifyExamLockViolation(primary.lock.tabId, 'background_tab_switch');
+}
+
+async function enforceExamLockForNewTab(tab) {
+  if (!tab || typeof tab.id !== 'number') return;
+
+  const primary = await ensurePrimaryLockAvailable();
+  if (!primary) return;
+  if (primary.lock.tabId === tab.id) return;
+
+  await chrome.tabs.remove(tab.id).catch(() => {});
+  await chrome.tabs.update(primary.lock.tabId, { active: true }).catch(() => {});
+  await chrome.windows.update(primary.windowId, { focused: true }).catch(() => {});
+  await notifyExamLockViolation(primary.lock.tabId, 'background_new_tab');
 }
 
 async function broadcastSettingsToTrackedTabs(settings) {
@@ -216,6 +337,10 @@ async function processLessonOpen(payload) {
 // ============ Tab/Navigation Tracking ============
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.url && !isThayGiapUrl(changeInfo.url)) {
+    clearExamLockForTab(tabId);
+  }
+
   if (changeInfo.status === 'complete' && tab.url && tab.url.includes('thaygiap.com')) {
     // Notify content script about page load
     chrome.tabs.sendMessage(tabId, { action: 'page_loaded', url: tab.url })
@@ -223,6 +348,26 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         // Content script not yet ready, ignore
       });
   }
+});
+
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  enforceExamLockForActivatedTab(activeInfo).catch((err) => {
+    console.error('[ThayGiap Tracker] exam lock activation error:', err);
+  });
+});
+
+chrome.tabs.onCreated.addListener((tab) => {
+  enforceExamLockForNewTab(tab).catch((err) => {
+    console.error('[ThayGiap Tracker] exam lock tab create error:', err);
+  });
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  clearExamLockForTab(tabId);
+});
+
+chrome.windows.onRemoved.addListener((windowId) => {
+  clearExamLockForWindow(windowId);
 });
 
 // ============ Extension Install/Update ============

@@ -628,6 +628,32 @@ async function runQuickActionPreset() {
       source: 'all-wrong'
     });
     startRvSession();
+  } else if (preset === 'review-hard5') {
+    await loadReviewTab();
+    applyRvPreset({
+      count: 5,
+      minWrong: 1,
+      order: 'wrong-desc',
+      direction: 'vi-en',
+      mode: 'type',
+      mastery: 'not-mastered',
+      autoAdvance: 1000,
+      source: 'all-wrong'
+    });
+    startRvSession();
+  } else if (preset === 'review-due-3m') {
+    await loadReviewTab();
+    applyRvPreset({
+      count: 20,
+      minWrong: 0,
+      order: 'wrong-desc',
+      direction: 'mixed',
+      mode: 'type',
+      mastery: 'not-mastered',
+      autoAdvance: 0,
+      source: 'review-list'
+    });
+    startRvSession();
   } else if (preset === 'offline-20') {
     activateTabById('offline');
     await loadOfflineTab();
@@ -1548,7 +1574,9 @@ function renderHistoryEvents() {
     lesson_close: '🚪',
     mode_switch: '🔄',
     round_switch: '🔁',
-    score_detected: '🏆'
+    score_detected: '🏆',
+    exam_fullscreen_exit: '🖥️',
+    exam_lock_violation: '⛔'
   };
 
   container.innerHTML = pageEvents.map(event => {
@@ -1578,6 +1606,14 @@ function renderHistoryEvents() {
       resultHtml = `<span class="event-result correct">${event.data.score}đ</span>`;
     } else if (event.type === 'mode_switch' && event.data) {
       title = `Chuyển mode: ${event.data.buttonText || ''}`;
+    } else if (event.type === 'exam_fullscreen_exit' && event.data) {
+      title = `Thoát toàn màn hình (${event.data.exitCount || 0})`;
+      detail = `Thoát lúc: ${event.data.exitedAtText || '-'}`;
+      resultHtml = `<span class="event-result wrong">FS</span>`;
+    } else if (event.type === 'exam_lock_violation' && event.data) {
+      title = `Vi phạm khóa test`;
+      detail = `Lý do: ${event.data.reason || 'unknown'} | Số lần: ${event.data.violationCount || 0}`;
+      resultHtml = `<span class="event-result wrong">!</span>`;
     }
 
     return `
@@ -1627,6 +1663,10 @@ async function loadSettingsTab() {
   if (trackingCheckbox) trackingCheckbox.checked = settings.trackingEnabled !== false;
   const notificationsCheckbox = document.getElementById('setting-notifications');
   if (notificationsCheckbox) notificationsCheckbox.checked = !!settings.notificationsEnabled;
+  const examLockCheckbox = document.getElementById('setting-exam-lock');
+  if (examLockCheckbox) examLockCheckbox.checked = settings.examLockEnabled !== false;
+  const examFullscreenCheckbox = document.getElementById('setting-exam-fullscreen');
+  if (examFullscreenCheckbox) examFullscreenCheckbox.checked = settings.examFullscreenEnabled !== false;
   vocabCompactMode = !!settings.vocabCompactMode;
 
   // Data stats
@@ -1662,6 +1702,26 @@ function setupSettingsActions() {
       sendMessage({
         action: 'update_settings',
         settings: { notificationsEnabled: notificationsCheckbox.checked }
+      });
+    });
+  }
+
+  const examLockCheckbox = document.getElementById('setting-exam-lock');
+  if (examLockCheckbox) {
+    examLockCheckbox.addEventListener('change', () => {
+      sendMessage({
+        action: 'update_settings',
+        settings: { examLockEnabled: examLockCheckbox.checked }
+      });
+    });
+  }
+
+  const examFullscreenCheckbox = document.getElementById('setting-exam-fullscreen');
+  if (examFullscreenCheckbox) {
+    examFullscreenCheckbox.addEventListener('change', () => {
+      sendMessage({
+        action: 'update_settings',
+        settings: { examFullscreenEnabled: examFullscreenCheckbox.checked }
       });
     });
   }

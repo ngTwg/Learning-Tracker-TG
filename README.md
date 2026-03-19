@@ -9,6 +9,11 @@
 - **Kiểm tra**: Theo dõi điểm số, lần thử (Lần 1-4)
 - **Luyện tập**: Ghi nhận tiến độ luyện tập từng bài/buổi
 - **Nút bấm**: Theo dõi Kiểm tra, Làm lại, Tiếp theo, Luyện tập
+- **HUD trên trang thaygiap.com**: Context bài học, progress realtime, ETA, goal ring, lỗi nhập theo nhóm
+- **Quick Actions trên HUD**: Thêm ô hiện tại vào ôn tập, đánh dấu khó, ôn nhanh 5 từ, ôn 3 phút, focus mode
+- **Hotkeys**: `Alt+R` thêm ôn tập, `Alt+H` gợi ý, `Alt+S` phát âm, `Alt+F` bật/tắt focus, `Alt+Q` ôn nhanh 5 từ
+- **Khóa bài kiểm tra**: Khi đang ở mode Kiểm tra có thể bật khóa để chặn mở tab/trang khác, theo dõi số lần vi phạm ngay trên HUD
+- **Toàn màn hình khi kiểm tra**: Có thể bắt buộc fullscreen, ghi nhận số lần thoát fullscreen và thời điểm thoát
 
 ### 📊 Thống kê chi tiết
 - **Popup**: Xem nhanh thống kê hôm nay (đúng/sai/accuracy)

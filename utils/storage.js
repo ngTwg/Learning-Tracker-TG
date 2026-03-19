@@ -545,6 +545,8 @@ async function getSessionSummaries() {
 const DEFAULT_SETTINGS = {
   trackingEnabled: true,
   notificationsEnabled: false,
+  examLockEnabled: true,
+  examFullscreenEnabled: true,
   autoExport: false,
   theme: 'dark',
   dailyAttemptGoal: 30,

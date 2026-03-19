@@ -21,14 +21,44 @@
   const state = {
     context: null,
     inputTrackers: new Map(), // inputId -> { wrongCount, lastValue, vietnamese }
+    sessionWordStats: new Map(), // vietnamese -> { wrong, correct }
+    answeredInputIds: new Set(),
+    errorBuckets: { spelling: 0, form: 0, spacing: 0, meaning: 0 },
+    lastErrorLabel: '',
     sessionCorrect: 0,
     sessionWrong: 0,
+    totalInputs: 0,
+    dueReviewCount: 0,
+    goalDailyAttempt: 0,
+    todayAttempts: 0,
+    goalProgressPct: 0,
+    selectorWarning: false,
+    focusMode: false,
+    examLockEnabled: true,
+    examFullscreenEnabled: true,
+    examLockActive: false,
+    examViolationCount: 0,
+    examFullscreenExitCount: 0,
+    examFullscreenExitTimes: [],
+    examGuardBound: false,
+    windowOpenPatched: false,
+    originalWindowOpen: typeof window.open === 'function' ? window.open.bind(window) : null,
+    lastExamViolationAt: 0,
+    lastExamViolationReason: '',
+    visibilityHiddenAt: 0,
+    isFullscreenActive: !!document.fullscreenElement,
+    suppressFullscreenExitRecord: false,
+    lastFullscreenRequestAt: 0,
+    lastFullscreenHintAt: 0,
     lastURL: location.href,
     isTracking: true,
     adapter: null,
     initTimer: null,
     urlWatcherIntervalId: null,
     contentRefreshIntervalId: null,
+    hudTickIntervalId: null,
+    dashboardRefreshIntervalId: null,
+    lastDashboardFetchAt: 0,
     lastInitializedURL: '',
     lastInitializedAt: 0,
     isInitializing: false,
@@ -90,10 +120,538 @@
       });
       if (res?.ok && res?.data) {
         state.isTracking = res.data.trackingEnabled !== false;
+        state.examLockEnabled = res.data.examLockEnabled !== false;
+        state.examFullscreenEnabled = res.data.examFullscreenEnabled !== false;
+        syncExamLockState('settings_loaded');
       }
     } catch (err) {
       logError('Load settings error:', err);
     }
+  }
+
+  function normalizeText(v) {
+    return String(v || '')
+      .toLowerCase()
+      .replace(/\(.*?\)/g, '')
+      .replace(/[_\s]+/g, ' ')
+      .trim();
+  }
+
+  function levenshtein(a, b) {
+    const m = a.length;
+    const n = b.length;
+    const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (a[i - 1] === b[j - 1]) dp[i][j] = dp[i - 1][j - 1];
+        else dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+    return dp[m][n];
+  }
+
+  function classifyError(userInput, correctAnswer) {
+    const typed = normalizeText(userInput);
+    const correct = normalizeText(correctAnswer);
+    if (!typed || !correct) return { key: 'meaning', label: 'Nhầm nghĩa/khác' };
+
+    if (typed.replace(/\s+/g, '') === correct.replace(/\s+/g, '') && typed !== correct) {
+      return { key: 'spacing', label: 'Thiếu/Thừa khoảng trắng' };
+    }
+
+    const distance = levenshtein(typed, correct);
+    if (distance <= 1 || (distance <= 2 && Math.max(typed.length, correct.length) >= 6)) {
+      return { key: 'spelling', label: 'Sai chính tả' };
+    }
+
+    const stem = s => s.replace(/(ing|ed|es|s)$/i, '');
+    if (stem(typed) === stem(correct) && typed !== correct) {
+      return { key: 'form', label: 'Sai dạng từ' };
+    }
+
+    return { key: 'meaning', label: 'Nhầm nghĩa/khác' };
+  }
+
+  function formatDuration(ms) {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  }
+
+  function formatETA(remainingItems) {
+    if (!remainingItems || remainingItems <= 0) return 'ETA 00:00';
+    const elapsed = state.lessonOpenTime ? (Date.now() - state.lessonOpenTime) : 0;
+    const answered = state.answeredInputIds.size;
+    if (!answered || elapsed <= 0) return 'ETA --:--';
+    const avgPerItem = elapsed / answered;
+    return `ETA ${formatDuration(avgPerItem * remainingItems)}`;
+  }
+
+  function getActiveTrackedInput() {
+    const activeEl = document.activeElement;
+    if (activeEl && activeEl.tagName === 'INPUT' && activeEl.dataset.tgTracked) return activeEl;
+    return null;
+  }
+
+  function updateSessionWordStat(vietnamese, isCorrect) {
+    if (!vietnamese) return;
+    const key = vietnamese.trim();
+    const existing = state.sessionWordStats.get(key) || { wrong: 0, correct: 0 };
+    if (isCorrect) existing.correct++;
+    else existing.wrong++;
+    state.sessionWordStats.set(key, existing);
+  }
+
+  function getTopWeakWords(limit = 3) {
+    return Array.from(state.sessionWordStats.entries())
+      .map(([word, stat]) => ({ word, wrong: stat.wrong || 0 }))
+      .filter(item => item.wrong > 0)
+      .sort((a, b) => b.wrong - a.wrong)
+      .slice(0, limit);
+  }
+
+  function showSessionSummaryToast() {
+    const total = state.sessionCorrect + state.sessionWrong;
+    if (total === 0) return;
+    const accuracy = Math.round((state.sessionCorrect / total) * 100);
+    const weak = getTopWeakWords(3);
+    const weakText = weak.length > 0
+      ? ` | Yếu: ${weak.map(w => `${w.word} (${w.wrong})`).join(', ')}`
+      : '';
+    const fullscreenExitText = state.examFullscreenExitCount > 0
+      ? ` | Thoát FS: ${state.examFullscreenExitCount} (${getRecentFullscreenExitText(2)})`
+      : '';
+    showToast(`Tóm tắt phiên: ${state.sessionCorrect} đúng / ${state.sessionWrong} sai (${accuracy}%)${weakText}${fullscreenExitText}`);
+  }
+
+  function updateSelectorWarningState() {
+    const hasInputs = document.querySelectorAll(getInputSelector()).length > 0;
+    const hintText = (document.body?.innerText || '').slice(0, 4000);
+    const likelyLearningView = /bài tập|luyện tập|kiểm tra|đáp án/i.test(hintText) || /exam|lesson/i.test(location.href);
+    state.selectorWarning = !hasInputs && likelyLearningView;
+  }
+
+  function isFullscreenAvailable() {
+    const root = document.documentElement;
+    return !!(document.fullscreenEnabled && root && typeof root.requestFullscreen === 'function');
+  }
+
+  function isCurrentlyFullscreen() {
+    return !!document.fullscreenElement;
+  }
+
+  function formatClockTime(timestamp) {
+    return new Date(timestamp).toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  }
+
+  function getLastFullscreenExitText() {
+    if (state.examFullscreenExitTimes.length === 0) return '-';
+    return formatClockTime(state.examFullscreenExitTimes[state.examFullscreenExitTimes.length - 1]);
+  }
+
+  function getRecentFullscreenExitText(limit = 3) {
+    if (state.examFullscreenExitTimes.length === 0) return 'chưa có';
+    return state.examFullscreenExitTimes
+      .slice(-limit)
+      .map(ts => formatClockTime(ts))
+      .join(', ');
+  }
+
+  function showFullscreenHint(message) {
+    const now = Date.now();
+    if ((now - state.lastFullscreenHintAt) < 4500) return;
+    state.lastFullscreenHintAt = now;
+    showToast(message);
+  }
+
+  async function requestExamFullscreen(source = 'auto') {
+    if (!state.examFullscreenEnabled || !isExamTestActive()) return false;
+    if (isCurrentlyFullscreen()) return true;
+    if (!isFullscreenAvailable()) {
+      if (source === 'manual') {
+        showToast('Trình duyệt không hỗ trợ toàn màn hình cho trang này.');
+      }
+      return false;
+    }
+
+    const now = Date.now();
+    if (source !== 'manual' && (now - state.lastFullscreenRequestAt) < 1200) {
+      return false;
+    }
+    state.lastFullscreenRequestAt = now;
+
+    try {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      state.isFullscreenActive = true;
+      updateBadge();
+      return true;
+    } catch (err) {
+      if (source === 'manual') {
+        showToast('Không thể bật toàn màn hình. Hãy thử thao tác lại.');
+      }
+      return false;
+    }
+  }
+
+  function ensureExamFullscreen(reason = 'auto') {
+    if (!isExamTestActive() || !state.examFullscreenEnabled) return;
+    requestExamFullscreen(reason).then((entered) => {
+      if (!entered && reason !== 'manual') {
+        showFullscreenHint('Đang kiểm tra: bấm "Toàn màn hình" trên HUD để tiếp tục.');
+      }
+    }).catch(() => {});
+  }
+
+  function handleFullscreenExitDetected() {
+    const exitedAt = Date.now();
+    const exitedAtText = formatClockTime(exitedAt);
+    state.examFullscreenExitCount += 1;
+    state.examFullscreenExitTimes.push(exitedAt);
+    if (state.examFullscreenExitTimes.length > 40) {
+      state.examFullscreenExitTimes.shift();
+    }
+
+    sendEvent('exam_fullscreen_exit', {
+      exitCount: state.examFullscreenExitCount,
+      exitedAt,
+      exitedAtText,
+      recentExitTimes: getRecentFullscreenExitText(5)
+    });
+
+    registerExamViolation('fullscreen_exit', { showToastNotice: false });
+    updateBadge();
+
+    const shouldResume = window.confirm(
+      `Bạn vừa thoát toàn màn hình lúc ${exitedAtText}.\n` +
+      `Tổng số lần thoát: ${state.examFullscreenExitCount}.\n` +
+      `Các mốc gần nhất: ${getRecentFullscreenExitText(3)}.\n\n` +
+      'Nhấn OK để vào lại toàn màn hình.'
+    );
+
+    if (shouldResume) {
+      setTimeout(() => {
+        requestExamFullscreen('manual');
+      }, 0);
+    } else {
+      showToast(`Đã lưu lần thoát #${state.examFullscreenExitCount} lúc ${exitedAtText}`);
+    }
+  }
+
+  function isExamLockRunning() {
+    return !!(state.examLockEnabled && state.examLockActive);
+  }
+
+  function isExamTestActive() {
+    return !!state.examLockActive;
+  }
+
+  function syncExamLockState(reason = '') {
+    try {
+      chrome.runtime.sendMessage({
+        action: 'exam_lock_update',
+        active: isExamLockRunning(),
+        reason,
+        context: state.context,
+        violations: state.examViolationCount
+      }, () => {
+        if (chrome.runtime.lastError) {
+          // Background can be asleep/restarting, ignore sync errors.
+        }
+      });
+    } catch (err) {
+      logError('syncExamLockState error:', err);
+    }
+  }
+
+  function refreshExamLockFromContext() {
+    const inTestMode = state.context?.partType === 'test';
+    const wasActive = state.examLockActive;
+    state.examLockActive = inTestMode;
+
+    if (!wasActive && inTestMode) {
+      state.examViolationCount = 0;
+      state.examFullscreenExitCount = 0;
+      state.examFullscreenExitTimes = [];
+    }
+    if (wasActive && !inTestMode) {
+      state.visibilityHiddenAt = 0;
+      state.suppressFullscreenExitRecord = isCurrentlyFullscreen();
+    }
+
+    syncExamLockState('context_changed');
+    ensureExamFullscreen('auto');
+    updateBadge();
+  }
+
+  function violationMessageByReason(reason) {
+    switch (reason) {
+      case 'blocked_shortcut':
+        return 'Đang kiểm tra: đã chặn phím tắt mở/chuyển tab.';
+      case 'blocked_link_navigation':
+        return 'Đang kiểm tra: không thể mở trang khác.';
+      case 'blocked_window_open':
+        return 'Đang kiểm tra: không thể mở tab mới.';
+      case 'background_tab_switch':
+        return 'Bạn vừa rời tab kiểm tra. Đã tự quay lại bài test.';
+      case 'background_new_tab':
+        return 'Đã chặn mở tab mới trong lúc kiểm tra.';
+      case 'visibility_hidden':
+        return 'Phát hiện rời cửa sổ/tab trong lúc kiểm tra.';
+      case 'fullscreen_exit':
+        return 'Bạn vừa thoát toàn màn hình khi đang kiểm tra.';
+      default:
+        return 'Vi phạm chế độ khóa kiểm tra.';
+    }
+  }
+
+  function registerExamViolation(reason, options = {}) {
+    if (!isExamLockRunning()) return;
+
+    const now = Date.now();
+    if (state.lastExamViolationReason === reason && (now - state.lastExamViolationAt) < 700) {
+      return;
+    }
+    state.lastExamViolationReason = reason;
+    state.lastExamViolationAt = now;
+    state.examViolationCount += 1;
+
+    sendEvent('exam_lock_violation', {
+      reason,
+      violationCount: state.examViolationCount
+    });
+
+    syncExamLockState('violation');
+    updateBadge();
+
+    if (options.showToastNotice !== false) {
+      showToast(options.message || violationMessageByReason(reason));
+    }
+  }
+
+  function isBlockedExamShortcut(e) {
+    if (e.key === 'F6') return true;
+
+    if (!(e.ctrlKey || e.metaKey)) return false;
+    const key = String(e.key || '').toLowerCase();
+
+    if (key === 't' || key === 'n' || key === 'l' || key === 'w') return true;
+    if (key === 'tab') return true;
+    if (/^[1-9]$/.test(key)) return true;
+
+    return false;
+  }
+
+  function setupExamLockGuards() {
+    if (state.examGuardBound) return;
+    state.examGuardBound = true;
+
+    document.addEventListener('keydown', (e) => {
+      if (!isExamLockRunning()) return;
+      if (!isBlockedExamShortcut(e)) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      registerExamViolation('blocked_shortcut');
+    }, true);
+
+    const handleAnchorBlock = (e) => {
+      if (!isExamLockRunning()) return;
+      if (!(e.target instanceof Element)) return;
+      const anchor = e.target.closest('a[href]');
+      if (!anchor) return;
+
+      const hrefRaw = (anchor.getAttribute('href') || '').trim();
+      if (!hrefRaw || hrefRaw.startsWith('#') || /^javascript:/i.test(hrefRaw)) return;
+
+      let nextUrl;
+      try {
+        nextUrl = new URL(anchor.href, location.href);
+      } catch (_err) {
+        return;
+      }
+
+      const sameDoc = nextUrl.origin === location.origin
+        && nextUrl.pathname === location.pathname
+        && nextUrl.search === location.search;
+
+      const isThayGiapDomain = /(^|\.)thaygiap\.com$/i.test(nextUrl.hostname);
+      const opensNewTab = anchor.target === '_blank' || e.ctrlKey || e.metaKey || e.button === 1;
+      const shouldBlock = opensNewTab || !sameDoc || !isThayGiapDomain;
+
+      if (!shouldBlock) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      registerExamViolation('blocked_link_navigation');
+    };
+
+    document.addEventListener('click', handleAnchorBlock, true);
+    document.addEventListener('auxclick', handleAnchorBlock, true);
+
+    if (!state.windowOpenPatched && typeof state.originalWindowOpen === 'function') {
+      window.open = function(...args) {
+        if (isExamLockRunning()) {
+          registerExamViolation('blocked_window_open');
+          return null;
+        }
+        return state.originalWindowOpen(...args);
+      };
+      state.windowOpenPatched = true;
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (!isExamLockRunning()) return;
+
+      if (document.hidden) {
+        state.visibilityHiddenAt = Date.now();
+        return;
+      }
+
+      if (state.visibilityHiddenAt > 0) {
+        registerExamViolation('visibility_hidden');
+        state.visibilityHiddenAt = 0;
+      }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      const nowFullscreen = isCurrentlyFullscreen();
+      const wasFullscreen = state.isFullscreenActive;
+      state.isFullscreenActive = nowFullscreen;
+
+      if (wasFullscreen && !nowFullscreen) {
+        if (state.suppressFullscreenExitRecord) {
+          state.suppressFullscreenExitRecord = false;
+          updateBadge();
+          return;
+        }
+
+        if (isExamTestActive() && state.examFullscreenEnabled) {
+          handleFullscreenExitDetected();
+        }
+      }
+
+      updateBadge();
+    });
+  }
+
+  function openOptionsWithPreset(preset) {
+    chrome.runtime.sendMessage({
+      action: 'update_settings',
+      settings: { quickActionPreset: preset }
+    }, () => {
+      const url = chrome.runtime.getURL('options/options.html#review-quick');
+      window.open(url, '_blank');
+    });
+  }
+
+  function addCurrentWordToReview(label = 'Đã thêm vào ôn tập') {
+    const activeEl = getActiveTrackedInput();
+    if (!activeEl) {
+      showToast('Hãy đặt con trỏ vào ô trả lời để dùng thao tác này.');
+      return;
+    }
+
+    const inputId = activeEl.dataset.tgInputId;
+    const tracker = state.inputTrackers.get(inputId);
+    if (!tracker?.vietnamese) {
+      showToast('Không xác định được từ hiện tại.');
+      return;
+    }
+
+    chrome.runtime.sendMessage({ action: 'add_to_review_list', vietnamese: tracker.vietnamese });
+    showToast(`${label}: "${tracker.vietnamese}"`);
+    refreshHudExternalData(true);
+  }
+
+  function pronounceCurrentWord() {
+    const activeEl = getActiveTrackedInput();
+    if (!activeEl) {
+      showToast('Không có từ để phát âm.');
+      return;
+    }
+
+    const inputId = activeEl.dataset.tgInputId;
+    const tracker = state.inputTrackers.get(inputId);
+    const answer = extractCorrectAnswer(activeEl) || tracker?.english || activeEl.value || '';
+    if (!answer) {
+      showToast('Chưa có đáp án mẫu để phát âm.');
+      return;
+    }
+
+    if (!window.speechSynthesis) {
+      showToast('Trình duyệt không hỗ trợ phát âm.');
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(answer);
+    utterance.lang = 'en-US';
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function showHintForCurrentInput() {
+    const activeEl = getActiveTrackedInput();
+    if (!activeEl) {
+      showToast('Đặt con trỏ vào ô trả lời để xem gợi ý.');
+      return;
+    }
+
+    const inputId = activeEl.dataset.tgInputId;
+    const tracker = state.inputTrackers.get(inputId);
+    const answer = normalizeText(extractCorrectAnswer(activeEl) || tracker?.english || '');
+    if (!answer) {
+      showToast('Chưa có gợi ý cho từ này.');
+      return;
+    }
+
+    const hint = answer
+      .split('')
+      .map((c, i) => (i === 0 || c === ' ' ? c : '_'))
+      .join('');
+    showToast(`Gợi ý: ${hint}`);
+  }
+
+  function toggleFocusMode() {
+    state.focusMode = !state.focusMode;
+    document.body.classList.toggle('tg-focus-mode', state.focusMode);
+    showToast(state.focusMode ? 'Đã bật Focus Mode' : 'Đã tắt Focus Mode');
+    updateBadge();
+  }
+
+  async function refreshHudExternalData(force = false) {
+    const now = Date.now();
+    if (!force && (now - state.lastDashboardFetchAt) < 15000) return;
+    state.lastDashboardFetchAt = now;
+
+    try {
+      const [settingsRes, todayRes, reviewRes] = await Promise.all([
+        new Promise((resolve) => chrome.runtime.sendMessage({ action: 'get_settings' }, resolve)),
+        new Promise((resolve) => chrome.runtime.sendMessage({ action: 'get_today_stats' }, resolve)),
+        new Promise((resolve) => chrome.runtime.sendMessage({ action: 'get_review_list' }, resolve))
+      ]);
+
+      const settings = settingsRes?.ok ? (settingsRes.data || {}) : {};
+      const today = todayRes?.ok ? (todayRes.data || {}) : {};
+      const review = reviewRes?.ok ? (reviewRes.data || []) : [];
+
+      state.goalDailyAttempt = Number(settings.dailyAttemptGoal || 0);
+      state.todayAttempts = Number(today.totalAttempts || 0);
+      state.dueReviewCount = Number(review.length || 0);
+      state.goalProgressPct = state.goalDailyAttempt > 0
+        ? Math.min(100, Math.round((state.todayAttempts / state.goalDailyAttempt) * 100))
+        : 0;
+    } catch (err) {
+      logError('refreshHudExternalData error:', err);
+    }
+
+    updateBadge();
   }
 
   // ============ Send Message to Background ============
@@ -119,6 +677,9 @@
 
     // Pulse badge animation
     pulseBadge();
+    if (type === 'answer_result' || type === 'lesson_open') {
+      refreshHudExternalData(false);
+    }
   }
 
   // ============ Context Detection ============
@@ -152,7 +713,9 @@
       round
     };
 
+    refreshExamLockFromContext();
     log('Context detected:', state.context);
+    updateBadge();
     return state.context;
   }
 
@@ -272,6 +835,9 @@
   function setupVocabTracking() {
     // Find all answer inputs
     const inputs = document.querySelectorAll(getInputSelector());
+    state.totalInputs = inputs.length;
+    updateSelectorWarningState();
+    updateBadge();
 
     if (inputs.length === 0) {
       log('No vocab inputs found, will retry...');
@@ -385,15 +951,21 @@
     // TRÁNH RECORD NHIỀU LẦN CÙNG THÁI CHO CÙNG ĐÁP ÁN (VD USER NHẬP "abc" SAI -> TRẢ VỀ 1 LẦN)
     if (tracker.lastReportedStatusKey === reportKey) return;
     tracker.lastReportedStatusKey = reportKey;
+    state.answeredInputIds.add(inputId);
 
     if (resultCorrect) {
       tracker.correctCount++;
       tracker.english = value;
       state.sessionCorrect++;
+      updateSessionWordStat(tracker.vietnamese, true);
     } else {
       tracker.wrongCount++;
       state.sessionWrong++;
       if (correctAnswer) tracker.english = correctAnswer;
+      updateSessionWordStat(tracker.vietnamese, false);
+      const classified = classifyError(value, correctAnswer || tracker.english || '');
+      state.errorBuckets[classified.key] = (state.errorBuckets[classified.key] || 0) + 1;
+      state.lastErrorLabel = classified.label;
     }
 
     tracker.attempts.push({ value, isCorrect: resultCorrect, timestamp: Date.now() });
@@ -721,6 +1293,12 @@
     state.urlWatcherIntervalId = setInterval(() => {
       if (location.href !== state.lastURL) {
         log(`URL changed: ${state.lastURL} → ${location.href}`);
+        showSessionSummaryToast();
+        if (isExamTestActive()) {
+          state.suppressFullscreenExitRecord = isCurrentlyFullscreen();
+          state.examLockActive = false;
+          syncExamLockState('url_changed');
+        }
         
         // Send lesson close for old URL
         sendEvent('lesson_close', {
@@ -739,6 +1317,12 @@
     window.addEventListener('popstate', () => {
       setTimeout(() => {
         if (location.href !== state.lastURL) {
+          showSessionSummaryToast();
+          if (isExamTestActive()) {
+            state.suppressFullscreenExitRecord = isCurrentlyFullscreen();
+            state.examLockActive = false;
+            syncExamLockState('history_nav');
+          }
           state.lastURL = location.href;
           scheduleInitialize(350);
         }
@@ -756,29 +1340,231 @@
     const badge = document.createElement('div');
     badge.id = 'tg-tracker-badge';
     badge.innerHTML = `
-      <span class="tg-icon">📊</span>
-      <span class="tg-label">Tracker</span>
-      <span class="tg-stats">
-        <span class="tg-correct" title="Đúng">✓ <span id="tg-correct-count">0</span></span>
-        <span class="tg-wrong" title="Sai">✗ <span id="tg-wrong-count">0</span></span>
-      </span>
-    `;
-    badge.title = 'ThayGiap Learning Tracker - Click để thu gọn';
+      <div class="tg-hud-header" id="tg-hud-toggle">
+        <span class="tg-title">TG HUD</span>
+        <button class="tg-mini-btn" id="tg-btn-minimize" title="Thu gọn">—</button>
+      </div>
+      <div class="tg-hud-body">
+        <div class="tg-hud-row tg-context">
+          <span id="tg-lesson-title" class="tg-lesson">Đang phân tích bài...</span>
+          <span id="tg-part-round" class="tg-pill">-</span>
+        </div>
 
-    // Toggle minimize on click
-    badge.addEventListener('click', () => {
-      badge.classList.toggle('tg-minimized');
-    });
+        <div class="tg-hud-row tg-lock-row">
+          <span id="tg-exam-lock-status" class="tg-lock-pill is-off">Khóa kiểm tra: Tắt</span>
+          <span id="tg-exam-lock-violations" class="tg-lock-count">Vi phạm: 0</span>
+        </div>
+        <div class="tg-hud-row tg-lock-row tg-fullscreen-row">
+          <span id="tg-fullscreen-status" class="tg-lock-pill is-off">Toàn màn hình: Tắt</span>
+          <span id="tg-fullscreen-exits" class="tg-lock-count">Thoát FS: 0</span>
+        </div>
+
+        <div class="tg-hud-row tg-progress-head">
+          <span id="tg-progress-text">0/0</span>
+          <span id="tg-eta-text">ETA --:--</span>
+        </div>
+        <div class="tg-progress-bar">
+          <div id="tg-progress-fill" class="tg-progress-fill"></div>
+        </div>
+
+        <div class="tg-hud-row tg-stats">
+          <span class="tg-correct" title="Đúng">✓ <span id="tg-correct-count">0</span></span>
+          <span class="tg-wrong" title="Sai">✗ <span id="tg-wrong-count">0</span></span>
+          <span class="tg-neutral">🎯 <span id="tg-accuracy">0%</span></span>
+          <span class="tg-neutral">⏱ <span id="tg-elapsed">00:00</span></span>
+        </div>
+
+        <div class="tg-hud-row tg-goal-row">
+          <div id="tg-goal-ring" class="tg-goal-ring"><span id="tg-goal-ring-text">0%</span></div>
+          <div class="tg-goal-info">
+            <div>Mục tiêu ngày</div>
+            <div id="tg-goal-text" class="tg-goal-sub">0 / 0</div>
+          </div>
+          <div class="tg-due-box">
+            <div>Đến hạn ôn</div>
+            <div id="tg-due-count" class="tg-goal-sub">0 từ</div>
+          </div>
+        </div>
+
+        <div class="tg-hud-row tg-errors">
+          <span class="tg-error-chip">📝 <span id="tg-err-spelling">0</span></span>
+          <span class="tg-error-chip">🔤 <span id="tg-err-form">0</span></span>
+          <span class="tg-error-chip">␣ <span id="tg-err-spacing">0</span></span>
+          <span class="tg-error-chip">❓ <span id="tg-err-meaning">0</span></span>
+        </div>
+        <div id="tg-last-error" class="tg-last-error"></div>
+
+        <div class="tg-hud-row tg-actions">
+          <button class="tg-action-btn" id="tg-btn-add-review">+ Ôn tập</button>
+          <button class="tg-action-btn" id="tg-btn-mark-hard">★ Khó</button>
+          <button class="tg-action-btn" id="tg-btn-quick5">Ôn nhanh 5</button>
+          <button class="tg-action-btn" id="tg-btn-review-3m">Ôn 3 phút</button>
+          <button class="tg-action-btn" id="tg-btn-fullscreen">Toàn màn hình</button>
+          <button class="tg-action-btn" id="tg-btn-focus">Focus: Tắt</button>
+        </div>
+
+        <div id="tg-selector-warning" class="tg-selector-warning" style="display:none;">
+          ⚠️ Có thể selector đã thay đổi, tracking có thể thiếu dữ liệu.
+        </div>
+      </div>
+    `;
+    badge.title = 'ThayGiap Learning HUD';
 
     document.body.appendChild(badge);
     state.badgeElement = badge;
+
+    const toggle = badge.querySelector('#tg-hud-toggle');
+    if (toggle) {
+      toggle.addEventListener('click', () => {
+        badge.classList.toggle('tg-minimized');
+      });
+    }
+
+    badge.querySelector('#tg-btn-add-review')?.addEventListener('click', () => addCurrentWordToReview('Đã thêm vào ôn tập'));
+    badge.querySelector('#tg-btn-mark-hard')?.addEventListener('click', () => addCurrentWordToReview('Đã đánh dấu khó'));
+    badge.querySelector('#tg-btn-quick5')?.addEventListener('click', () => openOptionsWithPreset('review-hard5'));
+    badge.querySelector('#tg-btn-review-3m')?.addEventListener('click', () => openOptionsWithPreset('review-due-3m'));
+    badge.querySelector('#tg-btn-fullscreen')?.addEventListener('click', () => requestExamFullscreen('manual'));
+    badge.querySelector('#tg-btn-focus')?.addEventListener('click', () => toggleFocusMode());
+
+    if (!state.hudTickIntervalId) {
+      state.hudTickIntervalId = setInterval(() => updateBadge(), 1000);
+    }
+    if (!state.dashboardRefreshIntervalId) {
+      state.dashboardRefreshIntervalId = setInterval(() => refreshHudExternalData(false), 20000);
+    }
+
+    refreshHudExternalData(true);
+    updateBadge();
   }
 
   function updateBadge() {
-    const correctEl = document.getElementById('tg-correct-count');
-    const wrongEl = document.getElementById('tg-wrong-count');
+    const badge = state.badgeElement || document.getElementById('tg-tracker-badge');
+    if (!badge) return;
+
+    const correctEl = badge.querySelector('#tg-correct-count');
+    const wrongEl = badge.querySelector('#tg-wrong-count');
+    const accuracyEl = badge.querySelector('#tg-accuracy');
+    const lessonEl = badge.querySelector('#tg-lesson-title');
+    const partRoundEl = badge.querySelector('#tg-part-round');
+    const progressTextEl = badge.querySelector('#tg-progress-text');
+    const progressFillEl = badge.querySelector('#tg-progress-fill');
+    const etaEl = badge.querySelector('#tg-eta-text');
+    const elapsedEl = badge.querySelector('#tg-elapsed');
+    const dueEl = badge.querySelector('#tg-due-count');
+    const errSpellingEl = badge.querySelector('#tg-err-spelling');
+    const errFormEl = badge.querySelector('#tg-err-form');
+    const errSpacingEl = badge.querySelector('#tg-err-spacing');
+    const errMeaningEl = badge.querySelector('#tg-err-meaning');
+    const lastErrorEl = badge.querySelector('#tg-last-error');
+    const focusBtnEl = badge.querySelector('#tg-btn-focus');
+    const selectorWarnEl = badge.querySelector('#tg-selector-warning');
+    const goalRingEl = badge.querySelector('#tg-goal-ring');
+    const goalRingTextEl = badge.querySelector('#tg-goal-ring-text');
+    const goalTextEl = badge.querySelector('#tg-goal-text');
+    const examLockStatusEl = badge.querySelector('#tg-exam-lock-status');
+    const examLockCountEl = badge.querySelector('#tg-exam-lock-violations');
+    const fullscreenStatusEl = badge.querySelector('#tg-fullscreen-status');
+    const fullscreenExitsEl = badge.querySelector('#tg-fullscreen-exits');
+    const fullscreenBtnEl = badge.querySelector('#tg-btn-fullscreen');
+
+    const total = state.sessionCorrect + state.sessionWrong;
+    const accuracy = total > 0 ? Math.round((state.sessionCorrect / total) * 100) : 0;
+    const completed = state.answeredInputIds.size;
+    const totalInputs = Math.max(state.totalInputs, state.inputTrackers.size);
+    const remaining = Math.max(0, totalInputs - completed);
+
     if (correctEl) correctEl.textContent = state.sessionCorrect;
     if (wrongEl) wrongEl.textContent = state.sessionWrong;
+    if (accuracyEl) accuracyEl.textContent = `${accuracy}%`;
+
+    if (lessonEl) {
+      lessonEl.textContent = state.context?.lessonTitle || state.context?.sessionTitle || 'Bài học hiện tại';
+    }
+    if (partRoundEl) {
+      const partLabelMap = { practice: 'Luyện tập', test: 'Kiểm tra', vocab: 'Từ vựng', essay: 'Viết', unknown: 'Khác' };
+      const partLabel = partLabelMap[state.context?.partType || 'unknown'] || 'Khác';
+      const roundLabel = state.context?.round ? `Lần ${state.context.round}` : '';
+      partRoundEl.textContent = [partLabel, roundLabel].filter(Boolean).join(' • ') || '-';
+    }
+
+    if (examLockStatusEl) {
+      const inTestMode = state.context?.partType === 'test';
+      let lockText = 'Khóa kiểm tra: Tắt';
+      if (state.examLockEnabled && inTestMode) lockText = 'Khóa kiểm tra: Bật';
+      else if (state.examLockEnabled && !inTestMode) lockText = 'Khóa kiểm tra: Chờ test';
+      else if (!state.examLockEnabled && inTestMode) lockText = 'Khóa kiểm tra: Tắt (cài đặt)';
+      examLockStatusEl.textContent = lockText;
+      examLockStatusEl.classList.toggle('is-active', isExamLockRunning());
+      examLockStatusEl.classList.toggle('is-off', !isExamLockRunning());
+    }
+
+    if (examLockCountEl) {
+      examLockCountEl.textContent = `Vi phạm: ${state.examViolationCount || 0}`;
+    }
+
+    if (fullscreenStatusEl) {
+      let fsText = 'Toàn màn hình: Tắt';
+      if (!state.examFullscreenEnabled) fsText = 'Toàn màn hình: Tắt (cài đặt)';
+      else if (!isExamTestActive()) fsText = 'Toàn màn hình: Chờ test';
+      else if (isCurrentlyFullscreen()) fsText = 'Toàn màn hình: Đang bật';
+      else fsText = 'Toàn màn hình: Đã thoát';
+
+      fullscreenStatusEl.textContent = fsText;
+      fullscreenStatusEl.classList.toggle('is-active', state.examFullscreenEnabled && isExamTestActive() && isCurrentlyFullscreen());
+      fullscreenStatusEl.classList.toggle('is-off', !state.examFullscreenEnabled || !isCurrentlyFullscreen());
+    }
+
+    if (fullscreenExitsEl) {
+      const exits = state.examFullscreenExitCount || 0;
+      const last = getLastFullscreenExitText();
+      fullscreenExitsEl.textContent = `Thoát FS: ${exits}`;
+      fullscreenExitsEl.title = exits > 0 ? `Lần gần nhất: ${last}` : 'Chưa có lần thoát toàn màn hình';
+    }
+
+    if (fullscreenBtnEl) {
+      const canUse = state.examFullscreenEnabled && isExamTestActive();
+      fullscreenBtnEl.style.opacity = canUse ? '1' : '0.5';
+      fullscreenBtnEl.title = canUse
+        ? 'Bật lại toàn màn hình'
+        : 'Chỉ dùng khi đang kiểm tra và đã bật setting fullscreen';
+    }
+
+    if (progressTextEl) progressTextEl.textContent = `${completed}/${totalInputs || 0}`;
+    if (progressFillEl) {
+      const pct = totalInputs > 0 ? Math.min(100, Math.round((completed / totalInputs) * 100)) : 0;
+      progressFillEl.style.width = `${pct}%`;
+    }
+    if (etaEl) etaEl.textContent = formatETA(remaining);
+    if (elapsedEl) elapsedEl.textContent = formatDuration(state.lessonOpenTime ? (Date.now() - state.lessonOpenTime) : 0);
+
+    if (dueEl) dueEl.textContent = `${state.dueReviewCount || 0} từ`;
+
+    if (errSpellingEl) errSpellingEl.textContent = state.errorBuckets.spelling || 0;
+    if (errFormEl) errFormEl.textContent = state.errorBuckets.form || 0;
+    if (errSpacingEl) errSpacingEl.textContent = state.errorBuckets.spacing || 0;
+    if (errMeaningEl) errMeaningEl.textContent = state.errorBuckets.meaning || 0;
+    if (lastErrorEl) {
+      if (!state.isTracking) lastErrorEl.textContent = 'Tracking đang tắt.';
+      else lastErrorEl.textContent = state.lastErrorLabel ? `Lỗi gần nhất: ${state.lastErrorLabel}` : '';
+    }
+
+    if (focusBtnEl) {
+      focusBtnEl.textContent = `Focus: ${state.focusMode ? 'Bật' : 'Tắt'}`;
+    }
+
+    if (selectorWarnEl) {
+      selectorWarnEl.style.display = state.selectorWarning ? '' : 'none';
+    }
+
+    if (goalRingEl && goalRingTextEl && goalTextEl) {
+      const pct = Math.max(0, Math.min(100, state.goalProgressPct || 0));
+      goalRingEl.style.background = `conic-gradient(#34d399 ${pct * 3.6}deg, rgba(255,255,255,0.12) 0deg)`;
+      goalRingTextEl.textContent = `${pct}%`;
+      goalTextEl.textContent = `${state.todayAttempts || 0} / ${state.goalDailyAttempt || 0}`;
+    }
+
+    badge.style.opacity = state.isTracking ? '1' : '0.65';
   }
 
   function pulseBadge() {
@@ -813,6 +1599,18 @@
     // Reset session state for new page
     state.sessionCorrect = 0;
     state.sessionWrong = 0;
+    state.sessionWordStats.clear();
+    state.answeredInputIds.clear();
+    state.errorBuckets = { spelling: 0, form: 0, spacing: 0, meaning: 0 };
+    state.lastErrorLabel = '';
+    state.selectorWarning = false;
+    state.examViolationCount = 0;
+    state.examFullscreenExitCount = 0;
+    state.examFullscreenExitTimes = [];
+    state.visibilityHiddenAt = 0;
+    state.isFullscreenActive = isCurrentlyFullscreen();
+    state.suppressFullscreenExitRecord = false;
+    state.totalInputs = 0;
     state.inputTrackers.clear();
     state.lessonOpenTime = Date.now();
     state.lastInitializedURL = location.href;
@@ -835,6 +1633,7 @@
         detectScores();
         createBadge();
         updateBadge();
+        refreshHudExternalData(true);
         log('Tracking setup complete!');
       } finally {
         state.isInitializing = false;
@@ -847,6 +1646,7 @@
     const hasButtons = document.querySelectorAll(getReadyButtonSelector()).length > 0;
 
     if (hasInputs || hasButtons || retryCount >= maxRetries) {
+      updateSelectorWarningState();
       callback();
     } else {
       log(`Waiting for content... (attempt ${retryCount + 1}/${maxRetries})`);
@@ -879,15 +1679,30 @@
         action: 'update_settings',
         settings: { trackingEnabled: state.isTracking }
       });
+      updateBadge();
       sendResponse({ isTracking: state.isTracking });
     }
 
     if (message.action === 'settings_updated' && message.settings) {
       const oldState = state.isTracking;
+      const oldFullscreenState = state.examFullscreenEnabled;
       state.isTracking = message.settings.trackingEnabled !== false;
+      state.examLockEnabled = message.settings.examLockEnabled !== false;
+      state.examFullscreenEnabled = message.settings.examFullscreenEnabled !== false;
       if (oldState !== state.isTracking) {
         log('Tracking settings synced:', state.isTracking ? 'enabled' : 'disabled');
       }
+      if (!oldFullscreenState && state.examFullscreenEnabled) {
+        ensureExamFullscreen('auto');
+      }
+      syncExamLockState('settings_updated');
+      updateBadge();
+      sendResponse({ ok: true });
+    }
+
+    if (message.action === 'exam_lock_violation') {
+      const reason = message.reason || 'background_tab_switch';
+      registerExamViolation(reason, { message: message.message });
       sendResponse({ ok: true });
     }
 
@@ -900,6 +1715,7 @@
   if (location.hostname.includes('thaygiap.com')) {
     const adapter = getAdapter();
     log(`Content script loaded on ${location.hostname} (adapter: ${adapter.id})`);
+    setupExamLockGuards();
 
     // Initial setup
     if (document.readyState === 'complete') {
@@ -910,42 +1726,84 @@
 
     // Setup URL watcher for SPA navigation
     setupURLWatcher();
+    window.addEventListener('beforeunload', () => {
+      showSessionSummaryToast();
+      state.suppressFullscreenExitRecord = isCurrentlyFullscreen();
+      state.examLockActive = false;
+      syncExamLockState('beforeunload');
+    });
 
     // Re-check for new content periodically (Angular lazy loading)
     if (!state.contentRefreshIntervalId) {
       state.contentRefreshIntervalId = setInterval(() => {
         const currentInputCount = document.querySelectorAll('input[data-tg-tracked]').length;
         const totalInputs = document.querySelectorAll(getInputSelector()).length;
+        const partType = detectPartType();
+        const round = detectRound();
+
+        if (!state.context || partType !== state.context.partType || round !== state.context.round) {
+          state.context = {
+            ...(state.context || {}),
+            url: location.href,
+            partType,
+            round
+          };
+          refreshExamLockFromContext();
+        }
+
+        state.totalInputs = totalInputs;
+        updateSelectorWarningState();
 
         if (totalInputs > currentInputCount) {
           log(`New inputs detected (${currentInputCount} → ${totalInputs}), updating tracking...`);
           setupVocabTracking();
         }
+        updateBadge();
       }, 3000);
     }
   }
 
-  // ============ Quick Add Feature (Alt+A) ============
+  // ============ Hotkeys ============
   document.addEventListener('keydown', (e) => {
-    if (e.altKey && e.code === 'KeyA') {
-      const activeEl = document.activeElement;
-      if (activeEl && activeEl.tagName === 'INPUT' && activeEl.dataset.tgTracked) {
-        e.preventDefault();
-        const inputId = activeEl.dataset.tgInputId;
-        const tracker = state.inputTrackers.get(inputId);
-        if (tracker && tracker.vietnamese) {
-          chrome.runtime.sendMessage({ action: 'add_to_review_list', vietnamese: tracker.vietnamese });
-          showToast(`Đã thêm "${tracker.vietnamese}" vào Danh sách Ôn tập!`);
-        }
-      }
+    if (!e.altKey || e.ctrlKey || e.metaKey) return;
+
+    if (e.code === 'KeyA' || e.code === 'KeyR') {
+      e.preventDefault();
+      addCurrentWordToReview('Đã thêm vào ôn tập');
+      return;
+    }
+
+    if (e.code === 'KeyH') {
+      e.preventDefault();
+      showHintForCurrentInput();
+      return;
+    }
+
+    if (e.code === 'KeyS') {
+      e.preventDefault();
+      pronounceCurrentWord();
+      return;
+    }
+
+    if (e.code === 'KeyF') {
+      e.preventDefault();
+      toggleFocusMode();
+      return;
+    }
+
+    if (e.code === 'KeyQ') {
+      e.preventDefault();
+      openOptionsWithPreset('review-hard5');
     }
   });
 
   function showToast(msg) {
     const toast = document.createElement('div');
     toast.textContent = msg;
+    const hud = document.getElementById('tg-tracker-badge');
+    const offsetBottom = hud ? (hud.classList.contains('tg-minimized') ? '76px' : '390px') : '80px';
     toast.style.cssText = `
-      position: fixed; bottom: 80px; right: 20px; background: #10b981; color: white;
+      position: fixed; bottom: ${offsetBottom}; right: 20px; background: #10b981; color: white;
       padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       z-index: 999999; font-family: sans-serif; font-size: 14px; transition: opacity 0.3s;
       font-weight: 600;
