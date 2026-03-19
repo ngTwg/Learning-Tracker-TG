@@ -12,13 +12,17 @@
 
 ### 📊 Thống kê chi tiết
 - **Popup**: Xem nhanh thống kê hôm nay (đúng/sai/accuracy)
+- **Quick Actions**: Ôn 10 từ khó, tự học offline, mở bài gần nhất, bật/tắt thông báo
 - **Dashboard**: Tổng quan, biểu đồ 7 ngày, mức thành thạo từ vựng
 - **Bảng từ vựng**: Tìm kiếm, lọc, sắp xếp theo nhiều tiêu chí
 - **Lịch sử**: Timeline chi tiết từng sự kiện
+- **Mục tiêu học tập**: Goal theo ngày/tuần + streak
+- **Weakness Map**: Phân tích nhóm lỗi nhập phổ biến
 
 ### 📤 Quản lý dữ liệu
 - Export JSON (toàn bộ dữ liệu)
 - Export CSV (bảng từ vựng)
+- Export/Import Anki CSV (Front/Back/Tags/IPA)
 - Xóa dữ liệu
 
 ## 🚀 Cài đặt
@@ -54,6 +58,7 @@ ThayGiap/
 │   └── options.js         # Dashboard logic (5 tabs)
 ├── utils/
 │   └── storage.js         # Storage helpers
+│   └── site-adapters.js   # Adapter registry for multi-site tracking
 ├── icons/
 │   ├── icon16.png
 │   ├── icon48.png
@@ -80,6 +85,7 @@ ThayGiap/
 - Tính toán vocab summary (mastery level, streak, avg attempts)
 - Tính session summary (per lesson/part)
 - Phục vụ data cho popup & options
+- Context menu thêm nhanh từ vào danh sách ôn tập
 
 ### 3. Data Model
 ```

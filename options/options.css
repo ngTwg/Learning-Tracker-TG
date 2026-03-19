@@ -29,6 +29,10 @@
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   --radius: 12px;
   --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --text-color: var(--text-primary);
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --primary-light: #90a5ff;
+  --bg-color: var(--bg-secondary);
 }
 
 html, body {
@@ -166,6 +170,15 @@ html, body {
   margin-bottom: 24px;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.tab-header.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg-primary);
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .tab-header h2 {
@@ -352,6 +365,16 @@ html, body {
 /* ============ Data Table ============ */
 .table-container {
   overflow-x: auto;
+}
+
+.table-container.compact .data-table tbody td {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.table-container.compact .data-table thead th {
+  padding: 8px 10px;
+  font-size: 11px;
 }
 
 .data-table {
@@ -649,6 +672,75 @@ html, body {
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.8;
+}
+
+.goal-input-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.goal-input-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.goal-progress-block {
+  margin-bottom: 14px;
+}
+
+.goal-progress-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.weakness-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.weakness-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.weakness-card-title {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.weakness-card-value {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.weakness-word-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.weakness-word-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.weakness-word-title {
+  font-weight: 700;
+}
+
+.weakness-word-sub {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 /* ============ Empty State ============ */

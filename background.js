@@ -13,6 +13,8 @@ try {
 
 console.log('[ThayGiap Tracker] Background service worker started');
 
+const CONTEXT_MENU_ADD_REVIEW = 'tg-add-selection-review';
+
 // ============ Message Handler ============
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !message.action) {
@@ -61,7 +63,9 @@ async function handleMessage(message, sender) {
       return { ok: true, data: await getSettings() };
 
     case 'update_settings':
-      return { ok: true, data: await updateSettings(message.settings) };
+      const updated = await updateSettings(message.settings);
+      await broadcastSettingsToTrackedTabs(updated);
+      return { ok: true, data: updated };
 
     case 'get_review_list':
       return { ok: true, data: await getReviewList() };
@@ -78,9 +82,24 @@ async function handleMessage(message, sender) {
       await processSM2Review(message.vietnamese, message.quality);
       return { ok: true };
 
+    case 'import_anki_rows':
+      return { ok: true, data: await importAnkiRows(message.rows || []) };
+
     default:
       return { ok: false, error: `Unknown action: ${message.action}` };
   }
+}
+
+async function broadcastSettingsToTrackedTabs(settings) {
+  const tabs = await chrome.tabs.query({
+    url: ['https://thaygiap.com/*', 'http://thaygiap.com/*']
+  });
+
+  await Promise.all(
+    tabs.map(tab =>
+      chrome.tabs.sendMessage(tab.id, { action: 'settings_updated', settings }).catch(() => {})
+    )
+  );
 }
 
 // ============ Event Processing ============
@@ -221,6 +240,47 @@ chrome.runtime.onInstalled.addListener((details) => {
 
   // Create an alarm to check for reviews every hour
   chrome.alarms.create('checkReviewCount', { periodInMinutes: 60 });
+  createContextMenus();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  chrome.alarms.create('checkReviewCount', { periodInMinutes: 60 });
+  createContextMenus();
+});
+
+function createContextMenus() {
+  try {
+    chrome.contextMenus.removeAll(() => {
+      chrome.contextMenus.create({
+        id: CONTEXT_MENU_ADD_REVIEW,
+        title: 'Thêm "%s" vào danh sách ôn tập',
+        contexts: ['selection'],
+        documentUrlPatterns: ['https://thaygiap.com/*', 'http://thaygiap.com/*']
+      });
+    });
+  } catch (err) {
+    console.error('[ThayGiap Tracker] createContextMenus error:', err);
+  }
+}
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== CONTEXT_MENU_ADD_REVIEW) return;
+
+  const selected = (info.selectionText || '').trim();
+  if (!selected) return;
+
+  try {
+    await addToReviewList(selected);
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'Đã thêm vào ôn tập',
+      message: `"${selected}" đã được thêm vào danh sách ôn tập.`,
+      priority: 1
+    });
+  } catch (err) {
+    console.error('[ThayGiap Tracker] context menu add review error:', err);
+  }
 });
 
 // ============ Notifications & Spaced Repetition (SM-2) ============
@@ -228,11 +288,14 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'checkReviewCount') {
     try {
+      const settings = await getSettings();
+      if (!settings.notificationsEnabled) return;
+
       const reviews = await getReviewList();
       if (reviews && reviews.length > 0) {
         const data = await storageGet(['tg_last_notified']);
         const lastNotified = data['tg_last_notified'];
-        const today = new Date().toDateString();
+        const today = getDateString();
 
         if (lastNotified !== today) {
           chrome.notifications.create({

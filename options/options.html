@@ -31,6 +31,18 @@
           <span class="sidebar-icon">🔁</span>
           <span>Ôn tập</span>
         </li>
+        <li class="sidebar-item" data-tab="goals">
+          <span class="sidebar-icon">🎯</span>
+          <span>Mục tiêu</span>
+        </li>
+        <li class="sidebar-item" data-tab="weakness">
+          <span class="sidebar-icon">🧠</span>
+          <span>Weakness Map</span>
+        </li>
+        <li class="sidebar-item" data-tab="offline">
+          <span class="sidebar-icon">🧩</span>
+          <span>Tự học offline</span>
+        </li>
         <li class="sidebar-item" data-tab="sessions">
           <span class="sidebar-icon">📅</span>
           <span>Phiên học</span>
@@ -45,7 +57,7 @@
         </li>
       </ul>
       <div class="sidebar-footer">
-        <span class="version-text">v1.0.0</span>
+        <span class="version-text">v1.1.0</span>
       </div>
     </nav>
 
@@ -128,6 +140,7 @@
               <option value="alpha">A-Z</option>
               <option value="mastery">Mức thành thạo</option>
             </select>
+            <button id="btn-vocab-compact" class="btn btn-secondary">Compact: Tắt</button>
           </div>
         </div>
 
@@ -392,6 +405,105 @@
         </div>
       </section>
 
+      <!-- Goals Tab -->
+      <section id="tab-goals" class="tab-content">
+        <div class="tab-header">
+          <h2>🎯 Mục tiêu học tập</h2>
+        </div>
+
+        <div class="settings-section">
+          <h3>Mục tiêu theo ngày/tuần</h3>
+          <div class="goal-input-grid">
+            <label class="goal-input-item">
+              <span>Số lượt làm/ngày</span>
+              <input type="number" id="goal-daily-attempts" min="1" max="1000" class="search-input">
+            </label>
+            <label class="goal-input-item">
+              <span>Số lượt làm/tuần</span>
+              <input type="number" id="goal-weekly-attempts" min="1" max="5000" class="search-input">
+            </label>
+          </div>
+          <div class="settings-actions" style="margin-top:14px;">
+            <button id="btn-save-goals" class="btn btn-primary">Lưu mục tiêu</button>
+          </div>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-card gradient-blue">
+            <div class="summary-icon">📅</div>
+            <div class="summary-info">
+              <div class="summary-value" id="goal-daily-progress-text">0 / 0</div>
+              <div class="summary-label">Tiến độ hôm nay</div>
+            </div>
+          </div>
+          <div class="summary-card gradient-orange">
+            <div class="summary-icon">🗓️</div>
+            <div class="summary-info">
+              <div class="summary-value" id="goal-weekly-progress-text">0 / 0</div>
+              <div class="summary-label">Tiến độ tuần này</div>
+            </div>
+          </div>
+          <div class="summary-card gradient-green">
+            <div class="summary-icon">🔥</div>
+            <div class="summary-info">
+              <div class="summary-value" id="goal-learning-streak">0</div>
+              <div class="summary-label">Streak học liên tiếp</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <h3>Tiến độ mục tiêu</h3>
+          <div class="goal-progress-block">
+            <div class="goal-progress-label">Hôm nay</div>
+            <div class="review-progress-bar"><div id="goal-daily-progress-bar" class="review-progress-fill"></div></div>
+          </div>
+          <div class="goal-progress-block">
+            <div class="goal-progress-label">Tuần này</div>
+            <div class="review-progress-bar"><div id="goal-weekly-progress-bar" class="review-progress-fill"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Weakness Tab -->
+      <section id="tab-weakness" class="tab-content">
+        <div class="tab-header">
+          <h2>🧠 Weakness Map</h2>
+        </div>
+
+        <div class="chart-card">
+          <h3>Nhóm lỗi thường gặp</h3>
+          <div class="weakness-grid" id="weakness-grid"></div>
+        </div>
+
+        <div class="chart-card">
+          <h3>Từ cần ưu tiên sửa lỗi</h3>
+          <div class="event-list" id="weakness-word-list"></div>
+          <div id="weakness-empty" class="empty-state" style="display:none;">
+            <span class="empty-icon">✨</span>
+            <p>Chưa đủ dữ liệu để phân tích lỗi.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Offline Tab -->
+      <section id="tab-offline" class="tab-content">
+        <div class="tab-header">
+          <h2>🧩 Tự học offline</h2>
+        </div>
+
+        <div class="settings-section">
+          <h3>Chế độ tự học không cần mở thaygiap.com</h3>
+          <p class="about-info">Extension sẽ dùng dữ liệu từ vựng đã lưu để tạo phiên ôn tập ngay trong tab Ôn tập.</p>
+          <div class="settings-actions" style="margin-top:14px;">
+            <button id="btn-offline-start-20" class="btn btn-primary">Bắt đầu 20 thẻ (trộn)</button>
+            <button id="btn-offline-start-due" class="btn btn-secondary">Ôn các từ đến hạn</button>
+            <button id="btn-offline-open-review" class="btn btn-secondary">Mở tab Ôn tập</button>
+          </div>
+          <div id="offline-stats" class="data-stats" style="margin-top:14px;"></div>
+        </div>
+      </section>
+
 
       <!-- Sessions Tab -->
       <section id="tab-sessions" class="tab-content">
@@ -456,6 +568,10 @@
             <span class="setting-label">Bật tracking</span>
             <input type="checkbox" id="setting-tracking" checked>
           </label>
+          <label class="setting-item">
+            <span class="setting-label">Bật thông báo ôn tập</span>
+            <input type="checkbox" id="setting-notifications">
+          </label>
         </div>
 
         <div class="settings-section">
@@ -463,8 +579,11 @@
           <div class="settings-actions">
             <button id="btn-export-json" class="btn btn-primary">📤 Export JSON</button>
             <button id="btn-export-csv" class="btn btn-secondary">📊 Export CSV</button>
+            <button id="btn-export-anki" class="btn btn-secondary">🗂️ Export Anki CSV</button>
+            <button id="btn-import-anki" class="btn btn-secondary">📥 Import Anki CSV</button>
             <button id="btn-clear-data" class="btn btn-danger">🗑️ Xóa toàn bộ dữ liệu</button>
           </div>
+          <input type="file" id="anki-file-input" accept=".csv,text/csv" style="display:none;">
           <div id="data-stats" class="data-stats">
             <!-- Rendered by JS -->
           </div>
@@ -473,7 +592,7 @@
         <div class="settings-section">
           <h3>Về extension</h3>
           <div class="about-info">
-            <p><strong>ThayGiap Learning Tracker</strong> v1.0.0</p>
+            <p><strong>ThayGiap Learning Tracker</strong> v1.1.0</p>
             <p>Theo dõi quá trình học trên hệ thống Thầy Giáp ENGLISH.</p>
             <p>Dữ liệu được lưu cục bộ trong trình duyệt (chrome.storage.local).</p>
           </div>

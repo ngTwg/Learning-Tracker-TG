@@ -384,6 +384,18 @@ body::-webkit-scrollbar-thumb:hover {
 .session-type-badge.test { background: rgba(248, 113, 113, 0.2); color: var(--accent-red); }
 .session-type-badge.vocab { background: rgba(52, 211, 153, 0.2); color: var(--accent-green); }
 
+/* ============ Quick Actions ============ */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quick-btn {
+  font-size: 11px;
+  padding: 8px 10px;
+}
+
 /* ============ Empty State ============ */
 .empty-state {
   text-align: center;

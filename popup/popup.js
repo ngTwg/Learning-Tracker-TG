@@ -20,10 +20,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadTodayStats();
   await loadVocabSummary();
   await loadRecentSessions();
+  await loadSettingsState();
 
   // Setup buttons
   setupButtons();
 });
+
+let popupSettings = {
+  trackingEnabled: true,
+  notificationsEnabled: false
+};
 
 // ============ Load Today Stats ============
 async function loadTodayStats() {
@@ -158,6 +164,30 @@ async function loadRecentSessions() {
   }
 }
 
+async function loadSettingsState() {
+  try {
+    const response = await sendMessage({ action: 'get_settings' });
+    if (response?.ok && response.data) {
+      popupSettings = { ...popupSettings, ...response.data };
+    }
+    renderSettingsUI();
+  } catch (err) {
+    console.error('Error loading popup settings:', err);
+  }
+}
+
+function renderSettingsUI() {
+  const icon = document.getElementById('tracking-icon');
+  if (icon) {
+    icon.textContent = popupSettings.trackingEnabled ? '🟢' : '🔴';
+  }
+
+  const notifyBtn = document.getElementById('btn-toggle-notification');
+  if (notifyBtn) {
+    notifyBtn.textContent = `Thông báo: ${popupSettings.notificationsEnabled ? 'Bật' : 'Tắt'}`;
+  }
+}
+
 // ============ Button Handlers ============
 function setupButtons() {
   // Options page
@@ -179,7 +209,7 @@ function setupButtons() {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `thaygiap-tracker-export-${new Date().toISOString().split('T')[0]}.json`;
+          a.download = `thaygiap-tracker-export-${formatDateLocal(new Date())}.json`;
           a.click();
           URL.revokeObjectURL(url);
         }
@@ -194,19 +224,64 @@ function setupButtons() {
   if (btnToggle) {
     btnToggle.addEventListener('click', async () => {
       try {
-        // Send toggle to content script of active tab
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab && tab.url && tab.url.includes('thaygiap.com')) {
-          chrome.tabs.sendMessage(tab.id, { action: 'toggle_tracking' }, (response) => {
-            const icon = document.getElementById('tracking-icon');
-            if (icon) {
-              icon.textContent = response && response.isTracking ? '🟢' : '🔴';
-            }
-          });
-        }
+        popupSettings.trackingEnabled = !popupSettings.trackingEnabled;
+        await sendMessage({
+          action: 'update_settings',
+          settings: { trackingEnabled: popupSettings.trackingEnabled }
+        });
+        renderSettingsUI();
       } catch (err) {
         console.error('Toggle error:', err);
       }
+    });
+  }
+
+  const btnQuickReview10 = document.getElementById('btn-quick-review10');
+  if (btnQuickReview10) {
+    btnQuickReview10.addEventListener('click', async () => {
+      await sendMessage({
+        action: 'update_settings',
+        settings: { quickActionPreset: 'review-top10-hard' }
+      });
+      openOptionsWithHash('#review-quick');
+    });
+  }
+
+  const btnQuickOffline = document.getElementById('btn-quick-offline');
+  if (btnQuickOffline) {
+    btnQuickOffline.addEventListener('click', async () => {
+      await sendMessage({
+        action: 'update_settings',
+        settings: { quickActionPreset: 'offline-20' }
+      });
+      openOptionsWithHash('#offline');
+    });
+  }
+
+  const btnOpenLast = document.getElementById('btn-open-last-lesson');
+  if (btnOpenLast) {
+    btnOpenLast.addEventListener('click', async () => {
+      const res = await sendMessage({ action: 'get_session_summaries' });
+      const sessions = Object.values(res?.data || {}).sort((a, b) => (b.lastPracticed || 0) - (a.lastPracticed || 0));
+      const lessonKey = sessions[0]?.lessonKey || '';
+      const url = lessonKey.split('|')[0];
+      if (url && /^https?:\/\//.test(url)) {
+        chrome.tabs.create({ url });
+      } else {
+        openOptionsWithHash('#sessions');
+      }
+    });
+  }
+
+  const btnToggleNotification = document.getElementById('btn-toggle-notification');
+  if (btnToggleNotification) {
+    btnToggleNotification.addEventListener('click', async () => {
+      popupSettings.notificationsEnabled = !popupSettings.notificationsEnabled;
+      await sendMessage({
+        action: 'update_settings',
+        settings: { notificationsEnabled: popupSettings.notificationsEnabled }
+      });
+      renderSettingsUI();
     });
   }
 }
@@ -259,4 +334,17 @@ function getRelativeTime(timestamp) {
   
   const d = new Date(timestamp);
   return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+}
+
+function openOptionsWithHash(hash) {
+  const url = chrome.runtime.getURL(`options/options.html${hash || ''}`);
+  chrome.tabs.create({ url });
+}
+
+function formatDateLocal(dateLike) {
+  const d = new Date(dateLike);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

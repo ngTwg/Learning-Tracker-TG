@@ -25,6 +25,13 @@
     sessionWrong: 0,
     lastURL: location.href,
     isTracking: true,
+    adapter: null,
+    initTimer: null,
+    urlWatcherIntervalId: null,
+    contentRefreshIntervalId: null,
+    lastInitializedURL: '',
+    lastInitializedAt: 0,
+    isInitializing: false,
     observer: null,
     lessonOpenTime: null,
     badgeElement: null
@@ -39,6 +46,54 @@
 
   function logError(...args) {
     console.error(LOG_PREFIX, ...args);
+  }
+
+  function getAdapter() {
+    if (state.adapter) return state.adapter;
+    const registry = window.TG_SITE_ADAPTERS;
+    if (registry && typeof registry.getAdapter === 'function') {
+      state.adapter = registry.getAdapter(location.hostname);
+    } else {
+      state.adapter = {
+        id: 'fallback',
+        selectors: {
+          input: 'input[placeholder*="Nhập đáp án"], input[aria-label*="Nhập đáp án"], input[id^="input-"]',
+          button: 'button, .ant-btn, input[type="button"], input[type="submit"], a[class*="btn"]',
+          scoreScope: '.ant-menu-item, [class*="sidebar"] *, [class*="list"] *, [class*="menu"] *',
+          contentReadyButton: 'button, .ant-btn'
+        }
+      };
+    }
+    return state.adapter;
+  }
+
+  function getInputSelector() {
+    return getAdapter().selectors.input;
+  }
+
+  function getButtonSelector() {
+    return getAdapter().selectors.button;
+  }
+
+  function getScoreScopeSelector() {
+    return getAdapter().selectors.scoreScope;
+  }
+
+  function getReadyButtonSelector() {
+    return getAdapter().selectors.contentReadyButton || getButtonSelector();
+  }
+
+  async function loadTrackingSettings() {
+    try {
+      const res = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'get_settings' }, resolve);
+      });
+      if (res?.ok && res?.data) {
+        state.isTracking = res.data.trackingEnabled !== false;
+      }
+    } catch (err) {
+      logError('Load settings error:', err);
+    }
   }
 
   // ============ Send Message to Background ============
@@ -164,7 +219,7 @@
     }
 
     // Check if vocab table exists with inputs
-    const vocabInputs = document.querySelectorAll('input[placeholder*="Nhập đáp án"], input[aria-label*="Nhập đáp án"]');
+    const vocabInputs = document.querySelectorAll(getInputSelector());
     if (vocabInputs.length > 0) return 'vocab';
 
     // Check for textarea (essay)
@@ -216,11 +271,7 @@
 
   function setupVocabTracking() {
     // Find all answer inputs
-    const inputs = document.querySelectorAll(
-      'input[placeholder*="Nhập đáp án"], ' +
-      'input[aria-label*="Nhập đáp án"], ' +
-      'input[id^="input-"]'
-    );
+    const inputs = document.querySelectorAll(getInputSelector());
 
     if (inputs.length === 0) {
       log('No vocab inputs found, will retry...');
@@ -310,7 +361,7 @@
     const ariaLabel = input.getAttribute('aria-label');
     if (ariaLabel && ariaLabel !== 'Nhập đáp án') return ariaLabel;
 
-    return `Word #${Array.from(document.querySelectorAll('input[placeholder*="Nhập đáp án"]')).indexOf(input) + 1}`;
+    return `Word #${Array.from(document.querySelectorAll(getInputSelector())).indexOf(input) + 1}`;
   }
 
   function checkInputState(input) {
@@ -502,7 +553,7 @@
           for (const node of mutation.addedNodes) {
             if (node.nodeType === Node.ELEMENT_NODE) {
               const newInputs = node.querySelectorAll ? 
-                node.querySelectorAll('input[placeholder*="Nhập đáp án"], input[aria-label*="Nhập đáp án"], input[id^="input-"]') :
+                node.querySelectorAll(getInputSelector()) :
                 [];
               if (newInputs.length > 0) {
                 log('New inputs detected, re-setting up tracking...');
@@ -561,7 +612,7 @@
 
   function setupButtonTracking() {
     // Find all relevant buttons
-    const allButtons = document.querySelectorAll('button, .ant-btn, input[type="button"], input[type="submit"], a[class*="btn"]');
+    const allButtons = document.querySelectorAll(getButtonSelector());
     
     const relevantPatterns = [
       /kiểm tra/i,
@@ -642,7 +693,7 @@
 
   function detectScores() {
     // Look for score patterns in sidebar: "0. Vocab Unit 1_Lần 1 8đ"
-    const sidebarItems = document.querySelectorAll('.ant-menu-item, [class*="sidebar"] *, [class*="list"] *, [class*="menu"] *');
+    const sidebarItems = document.querySelectorAll(getScoreScopeSelector());
     
     sidebarItems.forEach(item => {
       const text = item.textContent.trim();
@@ -664,8 +715,10 @@
   // ============ URL Change Detection (SPA) ============
 
   function setupURLWatcher() {
-    // Poll for URL changes (Angular SPA doesn't always trigger hashchange)
-    setInterval(() => {
+    if (state.urlWatcherIntervalId) return;
+
+    // Poll for URL changes (SPA navigation)
+    state.urlWatcherIntervalId = setInterval(() => {
       if (location.href !== state.lastURL) {
         log(`URL changed: ${state.lastURL} → ${location.href}`);
         
@@ -678,9 +731,7 @@
         state.lastURL = location.href;
         
         // Re-initialize for new page
-        setTimeout(() => {
-          initializeTracking();
-        }, 1000);
+        scheduleInitialize(900);
       }
     }, 1000);
 
@@ -689,7 +740,7 @@
       setTimeout(() => {
         if (location.href !== state.lastURL) {
           state.lastURL = location.href;
-          initializeTracking();
+          scheduleInitialize(350);
         }
       }, 500);
     });
@@ -741,14 +792,31 @@
 
   // ============ Initialization ============
 
-  function initializeTracking() {
+  function scheduleInitialize(delayMs = 0) {
+    if (state.initTimer) clearTimeout(state.initTimer);
+    state.initTimer = setTimeout(() => {
+      initializeTracking();
+    }, delayMs);
+  }
+
+  async function initializeTracking() {
+    if (state.isInitializing) return;
+    if (location.href === state.lastInitializedURL && (Date.now() - state.lastInitializedAt) < 1200) {
+      return;
+    }
+
+    state.isInitializing = true;
     log('Initializing tracking for:', location.href);
+
+    await loadTrackingSettings();
 
     // Reset session state for new page
     state.sessionCorrect = 0;
     state.sessionWrong = 0;
     state.inputTrackers.clear();
     state.lessonOpenTime = Date.now();
+    state.lastInitializedURL = location.href;
+    state.lastInitializedAt = Date.now();
 
     // Detect context
     detectContext();
@@ -761,21 +829,22 @@
 
     // Wait for Angular to render, then setup tracking
     waitForContent(() => {
-      setupVocabTracking();
-      setupButtonTracking();
-      detectScores();
-      createBadge();
-      updateBadge();
-      log('Tracking setup complete!');
+      try {
+        setupVocabTracking();
+        setupButtonTracking();
+        detectScores();
+        createBadge();
+        updateBadge();
+        log('Tracking setup complete!');
+      } finally {
+        state.isInitializing = false;
+      }
     });
   }
 
   function waitForContent(callback, maxRetries = 10, retryCount = 0) {
-    const hasInputs = document.querySelectorAll(
-      'input[placeholder*="Nhập đáp án"], input[aria-label*="Nhập đáp án"], input[id^="input-"]'
-    ).length > 0;
-
-    const hasButtons = document.querySelectorAll('button, .ant-btn').length > 0;
+    const hasInputs = document.querySelectorAll(getInputSelector()).length > 0;
+    const hasButtons = document.querySelectorAll(getReadyButtonSelector()).length > 0;
 
     if (hasInputs || hasButtons || retryCount >= maxRetries) {
       callback();
@@ -790,7 +859,7 @@
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'page_loaded') {
       log('Page loaded notification from background');
-      setTimeout(initializeTracking, 500);
+      scheduleInitialize(350);
     }
 
     if (message.action === 'get_current_state') {
@@ -806,7 +875,20 @@
     if (message.action === 'toggle_tracking') {
       state.isTracking = !state.isTracking;
       log('Tracking', state.isTracking ? 'enabled' : 'disabled');
+      chrome.runtime.sendMessage({
+        action: 'update_settings',
+        settings: { trackingEnabled: state.isTracking }
+      });
       sendResponse({ isTracking: state.isTracking });
+    }
+
+    if (message.action === 'settings_updated' && message.settings) {
+      const oldState = state.isTracking;
+      state.isTracking = message.settings.trackingEnabled !== false;
+      if (oldState !== state.isTracking) {
+        log('Tracking settings synced:', state.isTracking ? 'enabled' : 'disabled');
+      }
+      sendResponse({ ok: true });
     }
 
     return true;
@@ -816,30 +898,31 @@
 
   // Only run on thaygiap.com
   if (location.hostname.includes('thaygiap.com')) {
-    log('Content script loaded on thaygiap.com');
+    const adapter = getAdapter();
+    log(`Content script loaded on ${location.hostname} (adapter: ${adapter.id})`);
 
     // Initial setup
     if (document.readyState === 'complete') {
-      initializeTracking();
+      scheduleInitialize(0);
     } else {
-      window.addEventListener('load', () => initializeTracking());
+      window.addEventListener('load', () => scheduleInitialize(0));
     }
 
     // Setup URL watcher for SPA navigation
     setupURLWatcher();
 
     // Re-check for new content periodically (Angular lazy loading)
-    setInterval(() => {
-      const currentInputCount = document.querySelectorAll('input[data-tg-tracked]').length;
-      const totalInputs = document.querySelectorAll(
-        'input[placeholder*="Nhập đáp án"], input[aria-label*="Nhập đáp án"], input[id^="input-"]'
-      ).length;
+    if (!state.contentRefreshIntervalId) {
+      state.contentRefreshIntervalId = setInterval(() => {
+        const currentInputCount = document.querySelectorAll('input[data-tg-tracked]').length;
+        const totalInputs = document.querySelectorAll(getInputSelector()).length;
 
-      if (totalInputs > currentInputCount) {
-        log(`New inputs detected (${currentInputCount} → ${totalInputs}), updating tracking...`);
-        setupVocabTracking();
-      }
-    }, 3000);
+        if (totalInputs > currentInputCount) {
+          log(`New inputs detected (${currentInputCount} → ${totalInputs}), updating tracking...`);
+          setupVocabTracking();
+        }
+      }, 3000);
+    }
   }
 
   // ============ Quick Add Feature (Alt+A) ============

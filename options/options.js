@@ -7,14 +7,18 @@
 
 document.addEventListener('DOMContentLoaded', async () => {
   setupTabNavigation();
+  setupDeepLinkRouting();
   await loadOverviewTab();
   setupVocabFilters();
   setupWrongInputsFilters();
   setupSessionFilters();
   setupHistoryFilters();
   setupSettingsActions();
-  setupRvSettings();
+  applyInitialRoute();
 });
+
+let rvSettingsInitialized = false;
+let vocabCompactMode = false;
 
 // ============ Message Helper ============
 function sendMessage(message) {
@@ -30,24 +34,56 @@ function sendMessage(message) {
   });
 }
 
+function setupDeepLinkRouting() {
+  window.addEventListener('hashchange', () => applyInitialRoute());
+}
+
+function activateTabById(tabId) {
+  const menuItems = document.querySelectorAll('.sidebar-item[data-tab]');
+  menuItems.forEach(i => i.classList.toggle('active', i.dataset.tab === tabId));
+  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+  const targetTab = document.getElementById(`tab-${tabId}`);
+  if (targetTab) targetTab.classList.add('active');
+  loadTabData(tabId);
+}
+
+async function applyInitialRoute() {
+  const hash = (location.hash || '').replace('#', '');
+  if (!hash) return;
+
+  if (hash === 'review-quick') {
+    activateTabById('review');
+    await runQuickActionPreset();
+    return;
+  }
+
+  if (hash === 'offline') {
+    activateTabById('offline');
+    return;
+  }
+
+  if (hash === 'sessions') {
+    activateTabById('sessions');
+    return;
+  }
+
+  const knownTabs = ['overview', 'vocab', 'wrong-inputs', 'review', 'goals', 'weakness', 'offline', 'sessions', 'history', 'settings'];
+  if (knownTabs.includes(hash)) {
+    activateTabById(hash);
+  }
+}
+
 // ============ Tab Navigation ============
 function setupTabNavigation() {
   const menuItems = document.querySelectorAll('.sidebar-item[data-tab]');
   
   menuItems.forEach(item => {
     item.addEventListener('click', () => {
-      // Update sidebar active state
-      menuItems.forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
-
-      // Update tab content
       const tabId = item.dataset.tab;
-      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-      const targetTab = document.getElementById(`tab-${tabId}`);
-      if (targetTab) {
-        targetTab.classList.add('active');
-        // Load tab data
-        loadTabData(tabId);
+      if (location.hash !== `#${tabId}`) {
+        location.hash = tabId;
+      } else {
+        activateTabById(tabId);
       }
     });
   });
@@ -59,6 +95,9 @@ async function loadTabData(tabId) {
     case 'vocab':        await loadVocabTab(); break;
     case 'wrong-inputs': await loadWrongInputsTab(); break;
     case 'review':       await loadReviewTab(); break;
+    case 'goals':        await loadGoalsTab(); break;
+    case 'weakness':     await loadWeaknessTab(); break;
+    case 'offline':      await loadOfflineTab(); break;
     case 'sessions':     await loadSessionsTab(); break;
     case 'history':      await loadHistoryTab(); break;
     case 'settings':     await loadSettingsTab(); break;
@@ -162,6 +201,15 @@ function loadMasteryBreakdown(entries) {
 let vocabData = {};
 
 async function loadVocabTab() {
+  const settingsRes = await sendMessage({ action: 'get_settings' });
+  vocabCompactMode = !!settingsRes?.data?.vocabCompactMode;
+  const compactBtn = document.getElementById('btn-vocab-compact');
+  if (compactBtn) compactBtn.textContent = `Compact: ${vocabCompactMode ? 'Bật' : 'Tắt'}`;
+  applyVocabCompactMode();
+
+  const vocabTabHeader = document.querySelector('#tab-vocab .tab-header');
+  if (vocabTabHeader) vocabTabHeader.classList.add('sticky');
+
   const res = await sendMessage({ action: 'get_vocab_summaries' });
   vocabData = res?.data || {};
   renderVocabTable();
@@ -171,10 +219,25 @@ function setupVocabFilters() {
   const search = document.getElementById('vocab-search');
   const filter = document.getElementById('vocab-filter');
   const sort = document.getElementById('vocab-sort');
+  const compactBtn = document.getElementById('btn-vocab-compact');
 
   if (search) search.addEventListener('input', () => renderVocabTable());
   if (filter) filter.addEventListener('change', () => renderVocabTable());
   if (sort) sort.addEventListener('change', () => renderVocabTable());
+  if (compactBtn) {
+    compactBtn.addEventListener('click', async () => {
+      vocabCompactMode = !vocabCompactMode;
+      compactBtn.textContent = `Compact: ${vocabCompactMode ? 'Bật' : 'Tắt'}`;
+      await sendMessage({ action: 'update_settings', settings: { vocabCompactMode } });
+      applyVocabCompactMode();
+    });
+  }
+}
+
+function applyVocabCompactMode() {
+  const tableContainer = document.querySelector('.table-container');
+  if (!tableContainer) return;
+  tableContainer.classList.toggle('compact', !!vocabCompactMode);
 }
 
 function renderVocabTable() {
@@ -358,9 +421,10 @@ function renderWrongInputs() {
         }).join('')
       : `<p style="color:var(--text-muted);font-size:13px;">Chưa có chi tiết (dữ liệu cũ).</p>`;
 
+    const viEncoded = encodeURIComponent(entry.vietnamese || '');
     const inReviewBtn = isInReview
-      ? `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="removeFromReview('${escapeHtml(entry.vietnamese || '')}')">✓ Đang ôn tập</button>`
-      : `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="addToReview('${escapeHtml(entry.vietnamese || '')}')">+ Thêm vào ôn tập</button>`;
+      ? `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="removeFromReview(decodeURIComponent('${viEncoded}'))">✓ Đang ôn tập</button>`
+      : `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="addToReview(decodeURIComponent('${viEncoded}'))">+ Thêm vào ôn tập</button>`;
 
     const reviewBadge = isInReview ? `<span class="wi-review-badge">🔁</span>` : '';
 
@@ -431,12 +495,16 @@ async function loadReviewTab() {
   const res = await sendMessage({ action: 'get_vocab_summaries' });
   rvAllVocab = res?.data || {};
   setupRvSettings();
+  syncRvSettingButtonsUI();
   updateRvPreviewCount();
   showRvPanel('settings');
 }
 
 // ─── Settings Panel: button group interactions ───────────────────────
 function setupRvSettings() {
+  if (rvSettingsInitialized) return;
+  rvSettingsInitialized = true;
+
   const groups = {
     'rv-count-group':      'count',
     'rv-min-wrong-group':  'minWrong',
@@ -515,12 +583,68 @@ function setupRvSettings() {
   setupRvShortcuts();
 }
 
+function syncRvSettingButtonsUI() {
+  const groupMap = {
+    'rv-count-group': rvSettings.count,
+    'rv-min-wrong-group': rvSettings.minWrong,
+    'rv-order-group': rvSettings.order,
+    'rv-direction-group': rvSettings.direction,
+    'rv-mode-group': rvSettings.mode,
+    'rv-mastery-group': rvSettings.mastery,
+    'rv-advance-group': rvSettings.autoAdvance,
+    'rv-source-group': rvSettings.source
+  };
+
+  Object.entries(groupMap).forEach(([groupId, val]) => {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    group.querySelectorAll('.rv-opt-btn').forEach(btn => {
+      btn.classList.toggle('active', String(btn.dataset.val) === String(val));
+    });
+  });
+}
+
+function applyRvPreset(preset) {
+  Object.assign(rvSettings, preset || {});
+  syncRvSettingButtonsUI();
+  updateRvPreviewCount();
+}
+
+async function runQuickActionPreset() {
+  const settingsRes = await sendMessage({ action: 'get_settings' });
+  const preset = settingsRes?.data?.quickActionPreset || '';
+  if (!preset) return;
+
+  if (preset === 'review-top10-hard') {
+    await loadReviewTab();
+    applyRvPreset({
+      count: 10,
+      minWrong: 1,
+      order: 'wrong-desc',
+      direction: 'vi-en',
+      mode: 'type',
+      mastery: 'not-mastered',
+      autoAdvance: 1500,
+      source: 'all-wrong'
+    });
+    startRvSession();
+  } else if (preset === 'offline-20') {
+    activateTabById('offline');
+    await loadOfflineTab();
+  }
+
+  await sendMessage({
+    action: 'update_settings',
+    settings: { quickActionPreset: '' }
+  });
+}
+
 // ─── Build queue from settings ───────────────────────────────────────
 function buildRvQueue() {
   let words = Object.values(rvAllVocab);
 
   // Source filter
-  if (rvSettings.source === 'review-list')  words = words.filter(w => w.inReviewList);
+  if (rvSettings.source === 'review-list')  words = words.filter(w => w.inReviewList || (w.nextReviewDate && w.nextReviewDate <= Date.now()));
   else if (rvSettings.source === 'all-wrong') words = words.filter(w => (w.wrongAttempts || 0) > 0);
   // all-vocab: use all
 
@@ -529,8 +653,8 @@ function buildRvQueue() {
 
   // Mastery filter
   if (rvSettings.mastery !== 'all') {
-    if (rvSettings.mastery === 'not-mastered') words = words.filter(w => (w.masteryLevel || 'new') !== 'mastered');
-    else words = words.filter(w => (w.masteryLevel || 'new') === rvSettings.mastery);
+    if (rvSettings.mastery === 'not-mastered') words = words.filter(w => (w.mastery || 'new') !== 'mastered');
+    else words = words.filter(w => (w.mastery || 'new') === rvSettings.mastery);
   }
 
   // Order
@@ -539,7 +663,7 @@ function buildRvQueue() {
     case 'wrong-desc': words.sort((a,b) => (b.wrongAttempts||0) - (a.wrongAttempts||0)); break;
     case 'recent':     words.sort((a,b) => (b.lastSeen||0) - (a.lastSeen||0)); break;
     case 'alpha':      words.sort((a,b) => (a.vietnamese||'').localeCompare(b.vietnamese||'', 'vi')); break;
-    case 'streak-asc': words.sort((a,b) => (a.streak||0) - (b.streak||0)); break;
+    case 'streak-asc': words.sort((a,b) => (a.streakCorrect||0) - (b.streakCorrect||0)); break;
   }
 
   // Limit count
@@ -1042,6 +1166,248 @@ function setupRvShortcuts() {
   });
 }
 
+// ============ Goals Tab ============
+async function loadGoalsTab() {
+  const [settingsRes, todayRes, weeklyRes, allEventsRes] = await Promise.all([
+    sendMessage({ action: 'get_settings' }),
+    sendMessage({ action: 'get_today_stats' }),
+    sendMessage({ action: 'get_weekly_stats' }),
+    sendMessage({ action: 'get_events' })
+  ]);
+
+  const settings = settingsRes?.data || {};
+  const todayStats = todayRes?.data || {};
+  const weeklyStats = weeklyRes?.data || {};
+  const allEvents = allEventsRes?.data || [];
+
+  const dailyGoal = Number(settings.dailyAttemptGoal || 30);
+  const weeklyGoal = Number(settings.weeklyAttemptGoal || 180);
+
+  const dailyAttempts = Number(todayStats.totalAttempts || 0);
+  const weeklyAttempts = Object.values(weeklyStats).reduce((sum, d) => sum + (d.total || 0), 0);
+
+  const dailyInput = document.getElementById('goal-daily-attempts');
+  const weeklyInput = document.getElementById('goal-weekly-attempts');
+  if (dailyInput) dailyInput.value = dailyGoal;
+  if (weeklyInput) weeklyInput.value = weeklyGoal;
+
+  setText('goal-daily-progress-text', `${dailyAttempts} / ${dailyGoal}`);
+  setText('goal-weekly-progress-text', `${weeklyAttempts} / ${weeklyGoal}`);
+  setText('goal-learning-streak', calculateLearningStreak(allEvents));
+
+  const dailyPct = dailyGoal > 0 ? Math.min(100, Math.round((dailyAttempts / dailyGoal) * 100)) : 0;
+  const weeklyPct = weeklyGoal > 0 ? Math.min(100, Math.round((weeklyAttempts / weeklyGoal) * 100)) : 0;
+
+  const dayBar = document.getElementById('goal-daily-progress-bar');
+  const weekBar = document.getElementById('goal-weekly-progress-bar');
+  if (dayBar) dayBar.style.width = `${dailyPct}%`;
+  if (weekBar) weekBar.style.width = `${weeklyPct}%`;
+
+  const saveBtn = document.getElementById('btn-save-goals');
+  if (saveBtn && !saveBtn.dataset.bound) {
+    saveBtn.dataset.bound = 'true';
+    saveBtn.addEventListener('click', async () => {
+      const daily = Math.max(1, Number(document.getElementById('goal-daily-attempts')?.value || 30));
+      const weekly = Math.max(1, Number(document.getElementById('goal-weekly-attempts')?.value || 180));
+      await sendMessage({
+        action: 'update_settings',
+        settings: { dailyAttemptGoal: daily, weeklyAttemptGoal: weekly }
+      });
+      await loadGoalsTab();
+    });
+  }
+}
+
+function calculateLearningStreak(events) {
+  const activeDays = new Set(
+    (events || [])
+      .filter(e => e.type === 'answer_result')
+      .map(e => e.date)
+      .filter(Boolean)
+  );
+
+  let streak = 0;
+  const cursor = new Date();
+  while (true) {
+    const key = formatLocalDate(cursor);
+    if (!activeDays.has(key)) break;
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+}
+
+function formatLocalDate(dateLike) {
+  const d = new Date(dateLike);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// ============ Weakness Tab ============
+async function loadWeaknessTab() {
+  const res = await sendMessage({ action: 'get_vocab_summaries' });
+  const entries = Object.values(res?.data || {}).filter(e => (e.wrongAttempts || 0) > 0);
+
+  const emptyEl = document.getElementById('weakness-empty');
+  const gridEl = document.getElementById('weakness-grid');
+  const wordListEl = document.getElementById('weakness-word-list');
+  if (!gridEl || !wordListEl) return;
+
+  if (entries.length === 0) {
+    gridEl.innerHTML = '';
+    wordListEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const categoryCount = {};
+  const wordInsights = [];
+
+  entries.forEach(entry => {
+    const hist = entry.wrongInputHistory || [];
+    const localTypes = {};
+
+    if (hist.length === 0) {
+      const key = 'Nhầm nghĩa/khác';
+      categoryCount[key] = (categoryCount[key] || 0) + (entry.wrongAttempts || 0);
+      localTypes[key] = (localTypes[key] || 0) + (entry.wrongAttempts || 0);
+    } else {
+      hist.forEach(h => {
+        const type = classifyWrongPattern(h.typed || '', h.correct || entry.english || '');
+        categoryCount[type] = (categoryCount[type] || 0) + 1;
+        localTypes[type] = (localTypes[type] || 0) + 1;
+      });
+    }
+
+    const dominantType = Object.entries(localTypes).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Nhầm nghĩa/khác';
+    wordInsights.push({
+      vietnamese: entry.vietnamese || '',
+      english: entry.english || '?',
+      wrongAttempts: entry.wrongAttempts || 0,
+      dominantType
+    });
+  });
+
+  const topCategories = Object.entries(categoryCount).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  gridEl.innerHTML = topCategories.map(([type, count]) => `
+    <div class="weakness-card">
+      <div class="weakness-card-title">${escapeHtml(type)}</div>
+      <div class="weakness-card-value">${count}</div>
+    </div>
+  `).join('');
+
+  wordInsights.sort((a, b) => b.wrongAttempts - a.wrongAttempts);
+  wordListEl.innerHTML = wordInsights.slice(0, 30).map(item => `
+    <div class="event-item weakness-word-item">
+      <div class="weakness-word-main">
+        <div class="weakness-word-title">${escapeHtml(item.vietnamese)} → ${escapeHtml(item.english)}</div>
+        <div class="weakness-word-sub">Lỗi chính: ${escapeHtml(item.dominantType)}</div>
+      </div>
+      <div class="event-result wrong">✗ ${item.wrongAttempts}</div>
+    </div>
+  `).join('');
+}
+
+function classifyWrongPattern(typedRaw, correctRaw) {
+  const typed = normalizeToken(typedRaw);
+  const correct = normalizeToken(correctRaw);
+  if (!typed || !correct) return 'Nhầm nghĩa/khác';
+
+  if (typed.replace(/\s+/g, '') === correct.replace(/\s+/g, '') && typed !== correct) {
+    return 'Thiếu/Thừa khoảng trắng';
+  }
+
+  if (hasVietnameseDiacritics(typedRaw) && !hasVietnameseDiacritics(correctRaw)) {
+    return 'Gõ tiếng Việt thay tiếng Anh';
+  }
+
+  const distance = levenshtein(typed, correct);
+  if (distance <= 1) return 'Sai chính tả';
+  if (distance <= 2 && Math.max(typed.length, correct.length) >= 6) return 'Sai chính tả';
+
+  const stem = v => v.replace(/(ing|ed|es|s)$/i, '');
+  if (stem(typed) === stem(correct) && typed !== correct) {
+    return 'Sai dạng từ (s/ed/ing)';
+  }
+
+  if (Math.abs(typed.length - correct.length) >= 3) return 'Thiếu/Thừa ký tự';
+  return 'Nhầm nghĩa/khác';
+}
+
+function normalizeToken(v) {
+  return String(v || '')
+    .toLowerCase()
+    .replace(/\(.*?\)/g, '')
+    .replace(/[_\s]+/g, ' ')
+    .trim();
+}
+
+function hasVietnameseDiacritics(v) {
+  return /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(v || '');
+}
+
+// ============ Offline Tab ============
+async function loadOfflineTab() {
+  const [reviewRes, vocabRes] = await Promise.all([
+    sendMessage({ action: 'get_review_list' }),
+    sendMessage({ action: 'get_vocab_summaries' })
+  ]);
+
+  const dueCount = (reviewRes?.data || []).length;
+  const totalVocab = Object.keys(vocabRes?.data || {}).length;
+  const statsEl = document.getElementById('offline-stats');
+  if (statsEl) {
+    statsEl.textContent = `📌 ${dueCount} từ đến hạn ôn | 📚 ${totalVocab} từ có sẵn cho chế độ tự học`;
+  }
+
+  bindClickOnce('btn-offline-start-20', async () => {
+    activateTabById('review');
+    await loadReviewTab();
+    applyRvPreset({
+      count: 20,
+      minWrong: 0,
+      order: 'shuffle',
+      direction: 'mixed',
+      mode: 'type',
+      mastery: 'all',
+      autoAdvance: 0,
+      source: 'all-vocab'
+    });
+    startRvSession();
+  });
+
+  bindClickOnce('btn-offline-start-due', async () => {
+    activateTabById('review');
+    await loadReviewTab();
+    applyRvPreset({
+      count: 0,
+      minWrong: 0,
+      order: 'wrong-desc',
+      direction: 'mixed',
+      mode: 'type',
+      mastery: 'not-mastered',
+      autoAdvance: 0,
+      source: 'review-list'
+    });
+    startRvSession();
+  });
+
+  bindClickOnce('btn-offline-open-review', async () => {
+    activateTabById('review');
+    await loadReviewTab();
+  });
+}
+
+function bindClickOnce(id, handler) {
+  const el = document.getElementById(id);
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = 'true';
+  el.addEventListener('click', handler);
+}
+
 // ============ Sessions Tab ============
 let sessionData = {};
 
@@ -1129,7 +1495,7 @@ const EVENTS_PER_PAGE = 50;
 async function loadHistoryTab() {
   const dateInput = document.getElementById('history-date');
   if (dateInput && !dateInput.value) {
-    dateInput.value = new Date().toISOString().split('T')[0];
+    dateInput.value = formatLocalDate(new Date());
   }
 
   await fetchHistoryEvents();
@@ -1259,6 +1625,9 @@ async function loadSettingsTab() {
 
   const trackingCheckbox = document.getElementById('setting-tracking');
   if (trackingCheckbox) trackingCheckbox.checked = settings.trackingEnabled !== false;
+  const notificationsCheckbox = document.getElementById('setting-notifications');
+  if (notificationsCheckbox) notificationsCheckbox.checked = !!settings.notificationsEnabled;
+  vocabCompactMode = !!settings.vocabCompactMode;
 
   // Data stats
   const eventsRes = await sendMessage({ action: 'get_events' });
@@ -1283,6 +1652,16 @@ function setupSettingsActions() {
       sendMessage({
         action: 'update_settings',
         settings: { trackingEnabled: trackingCheckbox.checked }
+      });
+    });
+  }
+
+  const notificationsCheckbox = document.getElementById('setting-notifications');
+  if (notificationsCheckbox) {
+    notificationsCheckbox.addEventListener('change', () => {
+      sendMessage({
+        action: 'update_settings',
+        settings: { notificationsEnabled: notificationsCheckbox.checked }
       });
     });
   }
@@ -1320,6 +1699,46 @@ function setupSettingsActions() {
     });
   }
 
+  const btnExportAnki = document.getElementById('btn-export-anki');
+  if (btnExportAnki) {
+    btnExportAnki.addEventListener('click', async () => {
+      const res = await sendMessage({ action: 'get_vocab_summaries' });
+      const entries = Object.values(res?.data || {});
+      const headers = ['Front', 'Back', 'Tags', 'IPA'];
+      const rows = entries.map(e => {
+        const tags = ['thaygiap', e.mastery || 'new'];
+        if (e.inReviewList) tags.push('review');
+        return [e.vietnamese || '', e.english || '', tags.join(' '), e.ipa || ''];
+      });
+      const csv = [headers, ...rows]
+        .map(row => row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+      downloadFile(csv, `thaygiap-anki-${getDateStr()}.csv`, 'text/csv');
+    });
+  }
+
+  const btnImportAnki = document.getElementById('btn-import-anki');
+  const ankiFileInput = document.getElementById('anki-file-input');
+  if (btnImportAnki && ankiFileInput) {
+    btnImportAnki.addEventListener('click', () => ankiFileInput.click());
+    ankiFileInput.addEventListener('change', async () => {
+      const file = ankiFileInput.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      const rows = parseAnkiCsv(text);
+      if (rows.length === 0) {
+        alert('Không đọc được dữ liệu Anki từ file CSV.');
+        return;
+      }
+
+      const res = await sendMessage({ action: 'import_anki_rows', rows });
+      const report = res?.data || {};
+      alert(`Đã import ${report.imported || 0} dòng (${report.created || 0} mới, ${report.updated || 0} cập nhật, ${report.skipped || 0} bỏ qua).`);
+      ankiFileInput.value = '';
+      if (location.hash === '#vocab') await loadVocabTab();
+    });
+  }
+
   // Clear data
   const btnClear = document.getElementById('btn-clear-data');
   if (btnClear) {
@@ -1336,6 +1755,61 @@ function setupSettingsActions() {
 }
 
 // ============ Utility ============
+function parseCsvRow(line) {
+  const cells = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      const next = line[i + 1];
+      if (inQuotes && next === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      cells.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  cells.push(current);
+  return cells.map(v => v.trim());
+}
+
+function parseAnkiCsv(csvText) {
+  const lines = String(csvText || '')
+    .split(/\r?\n/)
+    .filter(line => line.trim().length > 0);
+  if (lines.length === 0) return [];
+
+  const header = parseCsvRow(lines[0]).map(h => h.toLowerCase());
+  const idxFront = header.findIndex(h => ['front', 'vietnamese', 'vi', 'nghia'].includes(h));
+  const idxBack = header.findIndex(h => ['back', 'english', 'en'].includes(h));
+  const idxTags = header.findIndex(h => h === 'tags');
+  const idxIpa = header.findIndex(h => h === 'ipa');
+
+  const hasHeader = idxFront >= 0 || idxBack >= 0;
+  const start = hasHeader ? 1 : 0;
+
+  const rows = [];
+  for (let i = start; i < lines.length; i++) {
+    const cells = parseCsvRow(lines[i]);
+    const vietnamese = cells[hasHeader ? idxFront : 0] || '';
+    const english = cells[hasHeader ? idxBack : 1] || '';
+    const tags = idxTags >= 0 ? (cells[idxTags] || '') : '';
+    const ipa = idxIpa >= 0 ? (cells[idxIpa] || '') : '';
+    if (!vietnamese.trim() || !english.trim()) continue;
+    rows.push({ vietnamese, english, tags, ipa });
+  }
+
+  return rows;
+}
+
 function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
@@ -1363,7 +1837,7 @@ function getRelativeTime(timestamp) {
 }
 
 function getDateStr() {
-  return new Date().toISOString().split('T')[0];
+  return formatLocalDate(new Date());
 }
 
 function downloadFile(content, filename, type) {

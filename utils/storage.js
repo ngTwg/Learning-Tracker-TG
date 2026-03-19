@@ -31,7 +31,10 @@ function generateUUID() {
 // ============ Date Helpers ============
 function getDateString(timestamp) {
   const d = new Date(timestamp || Date.now());
-  return d.toISOString().split('T')[0]; // "2026-03-18"
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`; // "2026-03-19" (local timezone)
 }
 
 function getTimeString(timestamp) {
@@ -174,6 +177,10 @@ async function updateVocabSummary(vocabData) {
       totalAttempts: 0,
       wrongAttempts: 0,
       correctAttempts: 0,
+      practiceCorrectAttempts: 0,
+      practiceWrongAttempts: 0,
+      reviewCorrectAttempts: 0,
+      reviewWrongAttempts: 0,
       firstSeen: now,
       lastSeen: now,
       avgAttemptsBeforeCorrect: 0,
@@ -201,6 +208,7 @@ async function updateVocabSummary(vocabData) {
 
   if (vocabData.isCorrect) {
     s.correctAttempts++;
+    s.practiceCorrectAttempts = (s.practiceCorrectAttempts || 0) + 1;
     s.streakCorrect++;
     if (vocabData.attemptNumber) {
       s.attemptsBeforeCorrectList.push(vocabData.attemptNumber);
@@ -210,6 +218,7 @@ async function updateVocabSummary(vocabData) {
     }
   } else {
     s.wrongAttempts++;
+    s.practiceWrongAttempts = (s.practiceWrongAttempts || 0) + 1;
     s.streakCorrect = 0;
 
     // ← NEW: track what the user actually typed when wrong
@@ -298,8 +307,30 @@ async function processSM2Review(vietnamese, quality) {
   const data = await storageGet([STORAGE_KEYS.VOCAB_SUMMARY]);
   const summaries = data[STORAGE_KEYS.VOCAB_SUMMARY] || {};
   const key = vietnamese.toLowerCase().trim();
+  const now = Date.now();
+  if (!summaries[key]) {
+    summaries[key] = {
+      vietnamese: vietnamese.trim(),
+      english: '',
+      totalAttempts: 0,
+      wrongAttempts: 0,
+      correctAttempts: 0,
+      practiceCorrectAttempts: 0,
+      practiceWrongAttempts: 0,
+      reviewCorrectAttempts: 0,
+      reviewWrongAttempts: 0,
+      firstSeen: now,
+      lastSeen: now,
+      avgAttemptsBeforeCorrect: 0,
+      streakCorrect: 0,
+      attemptsBeforeCorrectList: [],
+      wrongInputHistory: [],
+      inReviewList: true,
+      mastery: 'new'
+    };
+  }
   const s = summaries[key];
-  if (!s) return;
+  s.lastSeen = now;
 
   // Initialize SM-2 parameters if not present
   if (s.efactor === undefined) s.efactor = 2.5;
@@ -326,14 +357,13 @@ async function processSM2Review(vietnamese, quality) {
 
   s.nextReviewDate = Date.now() + s.interval * 24 * 60 * 60 * 1000;
 
-  // Sync back to traditional stats
+  // Keep review stats separate from real practice stats
   if (quality >= 3) {
+    s.reviewCorrectAttempts = (s.reviewCorrectAttempts || 0) + 1;
     s.inReviewList = false;
-    s.streakCorrect = (s.streakCorrect || 0) + 1;
   } else {
+    s.reviewWrongAttempts = (s.reviewWrongAttempts || 0) + 1;
     s.inReviewList = true;
-    s.streakCorrect = 0;
-    s.wrongAttempts = (s.wrongAttempts || 0) + 1;
   }
 
   // Upgrade mastery if earned based on SM-2
@@ -368,6 +398,77 @@ async function addToReviewList(vietnamese) {
 async function getVocabSummaries() {
   const data = await storageGet([STORAGE_KEYS.VOCAB_SUMMARY]);
   return data[STORAGE_KEYS.VOCAB_SUMMARY] || {};
+}
+
+/**
+ * Import vocab rows from Anki-style CSV payload.
+ * @param {Array<{vietnamese:string, english:string, ipa?:string, tags?:string}>} rows
+ * @returns {Promise<{imported:number,created:number,updated:number,skipped:number}>}
+ */
+async function importAnkiRows(rows = []) {
+  const data = await storageGet([STORAGE_KEYS.VOCAB_SUMMARY]);
+  const summaries = data[STORAGE_KEYS.VOCAB_SUMMARY] || {};
+  const now = Date.now();
+
+  const result = { imported: 0, created: 0, updated: 0, skipped: 0 };
+
+  rows.forEach((row) => {
+    const vietnamese = (row?.vietnamese || '').trim();
+    const english = (row?.english || '').trim();
+    const ipa = (row?.ipa || '').trim();
+    const tagsRaw = (row?.tags || '').trim().toLowerCase();
+
+    if (!vietnamese || !english) {
+      result.skipped++;
+      return;
+    }
+
+    const key = vietnamese.toLowerCase();
+    const exists = !!summaries[key];
+
+    if (!exists) {
+      summaries[key] = {
+        vietnamese,
+        english,
+        totalAttempts: 0,
+        wrongAttempts: 0,
+        correctAttempts: 0,
+        practiceCorrectAttempts: 0,
+        practiceWrongAttempts: 0,
+        reviewCorrectAttempts: 0,
+        reviewWrongAttempts: 0,
+        firstSeen: now,
+        lastSeen: now,
+        avgAttemptsBeforeCorrect: 0,
+        streakCorrect: 0,
+        attemptsBeforeCorrectList: [],
+        wrongInputHistory: [],
+        inReviewList: false,
+        mastery: 'new'
+      };
+      result.created++;
+    } else {
+      result.updated++;
+    }
+
+    const vocab = summaries[key];
+    vocab.vietnamese = vocab.vietnamese || vietnamese;
+    vocab.english = english || vocab.english || '';
+    vocab.lastSeen = now;
+    if (ipa) vocab.ipa = ipa;
+
+    if (tagsRaw.includes('review') || tagsRaw.includes('due')) {
+      vocab.inReviewList = true;
+    }
+    if (tagsRaw.includes('mastered')) vocab.mastery = 'mastered';
+    else if (tagsRaw.includes('reviewing')) vocab.mastery = 'reviewing';
+    else if (tagsRaw.includes('learning')) vocab.mastery = 'learning';
+
+    result.imported++;
+  });
+
+  await storageSet({ [STORAGE_KEYS.VOCAB_SUMMARY]: summaries });
+  return result;
 }
 
 // ============ Session Summary ============
@@ -445,7 +546,11 @@ const DEFAULT_SETTINGS = {
   trackingEnabled: true,
   notificationsEnabled: false,
   autoExport: false,
-  theme: 'dark'
+  theme: 'dark',
+  dailyAttemptGoal: 30,
+  weeklyAttemptGoal: 180,
+  vocabCompactMode: false,
+  quickActionPreset: ''
 };
 
 async function getSettings() {
@@ -471,7 +576,7 @@ async function exportAllData() {
   ]);
   return {
     exportedAt: new Date().toISOString(),
-    version: '1.0.0',
+    version: '1.1.0',
     ...data
   };
 }

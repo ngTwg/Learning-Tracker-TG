@@ -80,14 +80,10 @@ REM Push
 echo [3/3] Pushing to GitHub...
 git push -u origin main
 if !errorlevel! neq 0 (
-    echo.
-    echo [WARN] Push that bai. Thu push voi force...
-    git push -u origin main --force
-    if !errorlevel! neq 0 (
-        echo [ERROR] Khong the push! Kiem tra lai ket noi hoac quyen truy cap.
-        pause
-        exit /b 1
-    )
+    echo [ERROR] Push that bai! Khong tu dong --force de bao ve lich su git.
+    echo [HINT] Hay kiem tra conflict/rebase, sau do push lai thu cong.
+    pause
+    exit /b 1
 )
 echo      OK - Done
 

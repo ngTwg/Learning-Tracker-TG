@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "ThayGiap Learning Tracker",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Theo dõi quá trình học và làm bài trên hệ thống Thầy Giáp ENGLISH. Ghi nhận từ vựng đúng/sai, số lần sai, điểm kiểm tra, lịch sử luyện tập.",
   "permissions": [
     "storage",
     "tabs",
     "scripting",
     "alarms",
-    "notifications"
+    "notifications",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://thaygiap.com/*",
@@ -31,7 +32,7 @@
         "https://thaygiap.com/*",
         "http://thaygiap.com/*"
       ],
-      "js": ["content.js"],
+      "js": ["utils/site-adapters.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }
