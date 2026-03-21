@@ -1667,6 +1667,8 @@ async function loadSettingsTab() {
   if (examLockCheckbox) examLockCheckbox.checked = settings.examLockEnabled !== false;
   const examFullscreenCheckbox = document.getElementById('setting-exam-fullscreen');
   if (examFullscreenCheckbox) examFullscreenCheckbox.checked = settings.examFullscreenEnabled !== false;
+  const hudAutoMinimizeCheckbox = document.getElementById('setting-hud-auto-minimize');
+  if (hudAutoMinimizeCheckbox) hudAutoMinimizeCheckbox.checked = settings.hudAutoMinimizeEnabled !== false;
   vocabCompactMode = !!settings.vocabCompactMode;
 
   // Data stats
@@ -1722,6 +1724,16 @@ function setupSettingsActions() {
       sendMessage({
         action: 'update_settings',
         settings: { examFullscreenEnabled: examFullscreenCheckbox.checked }
+      });
+    });
+  }
+
+  const hudAutoMinimizeCheckbox = document.getElementById('setting-hud-auto-minimize');
+  if (hudAutoMinimizeCheckbox) {
+    hudAutoMinimizeCheckbox.addEventListener('change', () => {
+      sendMessage({
+        action: 'update_settings',
+        settings: { hudAutoMinimizeEnabled: hudAutoMinimizeCheckbox.checked }
       });
     });
   }

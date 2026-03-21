@@ -547,6 +547,7 @@ const DEFAULT_SETTINGS = {
   notificationsEnabled: false,
   examLockEnabled: true,
   examFullscreenEnabled: true,
+  hudAutoMinimizeEnabled: true,
   autoExport: false,
   theme: 'dark',
   dailyAttemptGoal: 30,

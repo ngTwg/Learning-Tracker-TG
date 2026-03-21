@@ -34,6 +34,8 @@
     goalProgressPct: 0,
     selectorWarning: false,
     focusMode: false,
+    hudAutoMinimizeEnabled: true,
+    hudAutoMinimizeTimerId: null,
     examLockEnabled: true,
     examFullscreenEnabled: true,
     examLockActive: false,
@@ -64,7 +66,10 @@
     isInitializing: false,
     observer: null,
     lessonOpenTime: null,
-    badgeElement: null
+    badgeElement: null,
+    lastFocusedInputId: '',
+    examDraftAnswers: new Map(),
+    verbLookupOpen: false
   };
 
   // ============ Logging ============
@@ -122,6 +127,7 @@
         state.isTracking = res.data.trackingEnabled !== false;
         state.examLockEnabled = res.data.examLockEnabled !== false;
         state.examFullscreenEnabled = res.data.examFullscreenEnabled !== false;
+        state.hudAutoMinimizeEnabled = res.data.hudAutoMinimizeEnabled !== false;
         syncExamLockState('settings_loaded');
       }
     } catch (err) {
@@ -135,6 +141,395 @@
       .replace(/\(.*?\)/g, '')
       .replace(/[_\s]+/g, ' ')
       .trim();
+  }
+
+  const IRREGULAR_VERBS = [
+    { base: 'be', past: 'was/were', participle: 'been' },
+    { base: 'become', past: 'became', participle: 'become' },
+    { base: 'begin', past: 'began', participle: 'begun' },
+    { base: 'break', past: 'broke', participle: 'broken' },
+    { base: 'bring', past: 'brought', participle: 'brought' },
+    { base: 'build', past: 'built', participle: 'built' },
+    { base: 'buy', past: 'bought', participle: 'bought' },
+    { base: 'catch', past: 'caught', participle: 'caught' },
+    { base: 'choose', past: 'chose', participle: 'chosen' },
+    { base: 'come', past: 'came', participle: 'come' },
+    { base: 'cost', past: 'cost', participle: 'cost' },
+    { base: 'cut', past: 'cut', participle: 'cut' },
+    { base: 'do', past: 'did', participle: 'done' },
+    { base: 'draw', past: 'drew', participle: 'drawn' },
+    { base: 'drink', past: 'drank', participle: 'drunk' },
+    { base: 'drive', past: 'drove', participle: 'driven' },
+    { base: 'eat', past: 'ate', participle: 'eaten' },
+    { base: 'fall', past: 'fell', participle: 'fallen' },
+    { base: 'feel', past: 'felt', participle: 'felt' },
+    { base: 'fight', past: 'fought', participle: 'fought' },
+    { base: 'find', past: 'found', participle: 'found' },
+    { base: 'fly', past: 'flew', participle: 'flown' },
+    { base: 'forget', past: 'forgot', participle: 'forgotten' },
+    { base: 'forgive', past: 'forgave', participle: 'forgiven' },
+    { base: 'get', past: 'got', participle: 'got/gotten' },
+    { base: 'give', past: 'gave', participle: 'given' },
+    { base: 'go', past: 'went', participle: 'gone' },
+    { base: 'grow', past: 'grew', participle: 'grown' },
+    { base: 'have', past: 'had', participle: 'had' },
+    { base: 'hear', past: 'heard', participle: 'heard' },
+    { base: 'hide', past: 'hid', participle: 'hidden' },
+    { base: 'hold', past: 'held', participle: 'held' },
+    { base: 'keep', past: 'kept', participle: 'kept' },
+    { base: 'know', past: 'knew', participle: 'known' },
+    { base: 'lead', past: 'led', participle: 'led' },
+    { base: 'leave', past: 'left', participle: 'left' },
+    { base: 'lose', past: 'lost', participle: 'lost' },
+    { base: 'make', past: 'made', participle: 'made' },
+    { base: 'meet', past: 'met', participle: 'met' },
+    { base: 'pay', past: 'paid', participle: 'paid' },
+    { base: 'put', past: 'put', participle: 'put' },
+    { base: 'read', past: 'read', participle: 'read' },
+    { base: 'ride', past: 'rode', participle: 'ridden' },
+    { base: 'ring', past: 'rang', participle: 'rung' },
+    { base: 'rise', past: 'rose', participle: 'risen' },
+    { base: 'run', past: 'ran', participle: 'run' },
+    { base: 'say', past: 'said', participle: 'said' },
+    { base: 'see', past: 'saw', participle: 'seen' },
+    { base: 'sell', past: 'sold', participle: 'sold' },
+    { base: 'send', past: 'sent', participle: 'sent' },
+    { base: 'show', past: 'showed', participle: 'shown' },
+    { base: 'sing', past: 'sang', participle: 'sung' },
+    { base: 'sit', past: 'sat', participle: 'sat' },
+    { base: 'sleep', past: 'slept', participle: 'slept' },
+    { base: 'speak', past: 'spoke', participle: 'spoken' },
+    { base: 'spend', past: 'spent', participle: 'spent' },
+    { base: 'stand', past: 'stood', participle: 'stood' },
+    { base: 'swim', past: 'swam', participle: 'swum' },
+    { base: 'take', past: 'took', participle: 'taken' },
+    { base: 'teach', past: 'taught', participle: 'taught' },
+    { base: 'tell', past: 'told', participle: 'told' },
+    { base: 'think', past: 'thought', participle: 'thought' },
+    { base: 'understand', past: 'understood', participle: 'understood' },
+    { base: 'wear', past: 'wore', participle: 'worn' },
+    { base: 'win', past: 'won', participle: 'won' },
+    { base: 'write', past: 'wrote', participle: 'written' }
+  ];
+
+  const irregularVerbIndex = (() => {
+    const index = new Map();
+    IRREGULAR_VERBS.forEach((entry) => {
+      [entry.base, entry.past, entry.participle]
+        .join('/')
+        .split(/[\/,]/)
+        .map(part => part.trim().toLowerCase())
+        .filter(Boolean)
+        .forEach((form) => {
+          index.set(form, entry);
+        });
+    });
+    return index;
+  })();
+
+  function normalizeInlineText(v) {
+    return String(v || '')
+      .replace(/\s+/g, ' ')
+      .replace(/\u00a0/g, ' ')
+      .trim();
+  }
+
+  function slugifySnippet(v, max = 80) {
+    return normalizeInlineText(v)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, max);
+  }
+
+  function isElementVisible(el) {
+    if (!el || typeof el.getBoundingClientRect !== 'function') return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+      return false;
+    }
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function hasClassToken(el, token) {
+    if (!el?.classList) return false;
+    const lower = token.toLowerCase();
+    return Array.from(el.classList).some((cls) => String(cls || '').toLowerCase() === lower);
+  }
+
+  function closestWithClassToken(el, tokens = []) {
+    const lookup = tokens.map(token => token.toLowerCase());
+    let node = el;
+    while (node) {
+      if (node.classList && Array.from(node.classList).some((cls) => lookup.includes(String(cls || '').toLowerCase()))) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  function buildRawInputSelector() {
+    return Array.from(new Set([
+      getInputSelector(),
+      'input[type="text"]',
+      'input:not([type])'
+    ]))
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  function isLikelyNonAnswerInput(input) {
+    const meta = [
+      input?.name,
+      input?.id,
+      input?.placeholder,
+      input?.autocomplete,
+      input?.getAttribute?.('aria-label'),
+      input?.getAttribute?.('inputmode')
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return /\b(email|e-mail|password|search|tìm kiếm|username|phone|otp|login|đăng nhập)\b/.test(meta);
+  }
+
+  function getClosestMainArea(input) {
+    return input?.closest?.('main, [role="main"], .ant-layout-content, .ant-layout, form, section, article') || document.body;
+  }
+
+  function getLocalContextText(input) {
+    const containers = [
+      input?.parentElement,
+      input?.closest?.('label, td, p, li, div, form, section, article'),
+      getClosestMainArea(input)
+    ].filter(Boolean);
+
+    return normalizeInlineText(
+      containers
+        .map(node => node?.textContent || '')
+        .filter(Boolean)
+        .join(' ')
+        .slice(0, 500)
+    );
+  }
+
+  function isTrackableAnswerInput(input) {
+    if (!input || !isElementVisible(input) || input.disabled || input.readOnly) return false;
+    if (input.closest?.('#tg-tracker-badge')) return false;
+    if (isLikelyNonAnswerInput(input)) return false;
+
+    const tag = String(input.tagName || '').toLowerCase();
+    const type = String(input.type || '').toLowerCase();
+    if (tag !== 'input') return false;
+    if (type && !['text', 'search'].includes(type)) return false;
+
+    const meta = [
+      input.placeholder,
+      input.getAttribute('aria-label'),
+      input.id,
+      input.name
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    if (/nhập đáp án|answer|đáp án/.test(meta)) return true;
+    if (input.id && /^input[-_]/i.test(input.id)) return true;
+
+    const url = location.href.toLowerCase();
+    const contextText = getLocalContextText(input).toLowerCase();
+
+    if (/\/user\/exam\b/i.test(url)) {
+      if (input.closest('.exam-container, [role="main"], main, .ant-layout-content, [class*="exam"]')) return true;
+      return /_{2,}|\([^)]+\)|câu\s+\d+|nộp bài|tiếp|trước|present perfect|hiện tại hoàn thành/i.test(contextText);
+    }
+
+    if (/\/lesson|\/practice|luyện tập/.test(url)) {
+      return !!input.closest('table, form, main, [role="main"], .ant-layout-content');
+    }
+
+    return false;
+  }
+
+  function getTrackableInputs(root = document) {
+    const selector = buildRawInputSelector();
+    const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+    const candidates = Array.from(scope.querySelectorAll(selector));
+    return Array.from(new Set(candidates)).filter(isTrackableAnswerInput);
+  }
+
+  function detectQuestionProgress() {
+    const candidates = document.querySelectorAll('button, span, div, p, h1, h2, h3, strong');
+    for (const node of candidates) {
+      const text = normalizeInlineText(node.textContent);
+      const match = text.match(/câu\s*(\d+)\s*\/\s*(\d+)/i);
+      if (match) {
+        return {
+          current: Number(match[1]) || null,
+          total: Number(match[2]) || null,
+          label: match[0]
+        };
+      }
+    }
+
+    const fallback = normalizeInlineText((document.body?.innerText || '').slice(0, 4000));
+    const match = fallback.match(/câu\s*(\d+)\s*\/\s*(\d+)/i);
+    if (match) {
+      return {
+        current: Number(match[1]) || null,
+        total: Number(match[2]) || null,
+        label: match[0]
+      };
+    }
+
+    return { current: null, total: null, label: '' };
+  }
+
+  function findQuestionContainer(input) {
+    let node = input?.parentElement;
+    let best = null;
+
+    while (node && node !== document.body) {
+      const text = normalizeInlineText(node.textContent);
+      const inputCount = node.querySelectorAll ? getTrackableInputs(node).length : 0;
+      const looksLikeQuestion = /_{2,}|\([^)]+\)|\?|câu\s+\d+/i.test(text);
+      const textLen = text.length;
+      if (looksLikeQuestion && textLen >= 12 && textLen <= 280 && inputCount <= 4) {
+        best = node;
+        break;
+      }
+      if (!best && textLen >= 12 && textLen <= 180 && inputCount <= 2) {
+        best = node;
+      }
+      node = node.parentElement;
+    }
+
+    return best || input?.parentElement || null;
+  }
+
+  function extractBaseVerb(text) {
+    const matches = Array.from(String(text || '').matchAll(/\(([^()]+)\)/g));
+    if (matches.length === 0) return '';
+    const raw = matches[matches.length - 1][1]
+      .replace(/\bnot\b/gi, ' ')
+      .trim()
+      .split(/\s+/)
+      .pop();
+    return String(raw || '').toLowerCase().replace(/[^a-z-]/g, '');
+  }
+
+  function extractQuestionMetaForInput(input, index = 0) {
+    const container = findQuestionContainer(input);
+    const promptText = normalizeInlineText(container?.textContent || getLocalContextText(input) || '');
+    const groupRoot = container || input?.parentElement || document.body;
+    const siblingInputs = getTrackableInputs(groupRoot);
+    const blankIndex = Math.max(1, siblingInputs.indexOf(input) + 1 || index + 1);
+    const progress = detectQuestionProgress();
+    return {
+      promptText,
+      baseVerb: extractBaseVerb(promptText),
+      blankIndex,
+      blankCount: Math.max(1, siblingInputs.length || 1),
+      questionIndex: progress.current,
+      questionTotal: progress.total,
+      questionLabel: progress.label
+    };
+  }
+
+  function buildInputTrackingId(input, index, meta = {}) {
+    const baseId = (input?.id || input?.name || '').trim();
+    const questionKey = meta.questionIndex ? `q${meta.questionIndex}` : 'qx';
+    const blankKey = `b${meta.blankIndex || index + 1}`;
+    const promptKey = slugifySnippet(meta.promptText || '');
+
+    if (state.context?.partType === 'test') {
+      return ['exam', questionKey, promptKey || baseId || 'blank', blankKey].filter(Boolean).join('|');
+    }
+
+    if (baseId) return baseId;
+
+    return [
+      state.context?.partType || 'unknown',
+      slugifySnippet(state.context?.currentItem || '') || 'item',
+      promptKey || 'input',
+      blankKey
+    ].join('|');
+  }
+
+  function rememberFocusedInput(inputId) {
+    if (inputId) state.lastFocusedInputId = inputId;
+  }
+
+  function toRegularPast(base) {
+    const verb = String(base || '').toLowerCase().trim();
+    if (!verb) return '';
+    if (/[^aeiou]y$/.test(verb)) return `${verb.slice(0, -1)}ied`;
+    if (/e$/.test(verb)) return `${verb}d`;
+    return `${verb}ed`;
+  }
+
+  function lookupIrregularVerb(term) {
+    const normalized = String(term || '').toLowerCase().trim().replace(/[^a-z/-]/g, '');
+    if (!normalized) return null;
+    const entry = irregularVerbIndex.get(normalized);
+    if (entry) {
+      return { ...entry, irregular: true };
+    }
+    return {
+      base: normalized,
+      past: toRegularPast(normalized),
+      participle: toRegularPast(normalized),
+      irregular: false
+    };
+  }
+
+  function getSuggestedVerbFromInput(input) {
+    if (!input) return '';
+    const tracker = state.inputTrackers.get(input.dataset.tgInputId || '');
+    return tracker?.baseVerb || extractQuestionMetaForInput(input).baseVerb || '';
+  }
+
+  function upsertExamDraftAnswer(input, tracker, reason = 'input') {
+    if (state.context?.partType !== 'test' || !input) return;
+    const inputId = input.dataset.tgInputId || tracker?.inputId;
+    if (!inputId) return;
+    const meta = tracker?.meta || extractQuestionMetaForInput(input);
+
+    state.examDraftAnswers.set(inputId, {
+      inputId,
+      questionIndex: meta.questionIndex || null,
+      questionTotal: meta.questionTotal || null,
+      questionLabel: meta.questionLabel || '',
+      promptText: meta.promptText || tracker?.vietnamese || '',
+      baseVerb: meta.baseVerb || tracker?.baseVerb || '',
+      blankIndex: meta.blankIndex || 1,
+      blankCount: meta.blankCount || 1,
+      typedValue: String(input.value || '').trim(),
+      currentItem: state.context?.currentItem || '',
+      lessonTitle: state.context?.lessonTitle || '',
+      updatedAt: Date.now(),
+      reason
+    });
+  }
+
+  function collectExamDraftAnswers() {
+    return Array.from(state.examDraftAnswers.values()).sort((a, b) => {
+      if ((a.questionIndex || 0) !== (b.questionIndex || 0)) {
+        return (a.questionIndex || 0) - (b.questionIndex || 0);
+      }
+      return (a.blankIndex || 0) - (b.blankIndex || 0);
+    });
+  }
+
+  function snapshotCurrentVisibleAnswers(reason = 'snapshot') {
+    getTrackableInputs().forEach((input) => {
+      const tracker = state.inputTrackers.get(input.dataset.tgInputId || '');
+      upsertExamDraftAnswer(input, tracker, reason);
+    });
+    return collectExamDraftAnswers();
   }
 
   function levenshtein(a, b) {
@@ -192,7 +587,13 @@
 
   function getActiveTrackedInput() {
     const activeEl = document.activeElement;
-    if (activeEl && activeEl.tagName === 'INPUT' && activeEl.dataset.tgTracked) return activeEl;
+    if (activeEl && activeEl.tagName === 'INPUT' && activeEl.dataset.tgTracked) {
+      rememberFocusedInput(activeEl.dataset.tgInputId);
+      return activeEl;
+    }
+    if (state.lastFocusedInputId) {
+      return document.querySelector(`input[data-tg-input-id="${CSS.escape(state.lastFocusedInputId)}"]`);
+    }
     return null;
   }
 
@@ -228,7 +629,7 @@
   }
 
   function updateSelectorWarningState() {
-    const hasInputs = document.querySelectorAll(getInputSelector()).length > 0;
+    const hasInputs = getTrackableInputs().length > 0;
     const hintText = (document.body?.innerText || '').slice(0, 4000);
     const likelyLearningView = /bài tập|luyện tập|kiểm tra|đáp án/i.test(hintText) || /exam|lesson/i.test(location.href);
     state.selectorWarning = !hasInputs && likelyLearningView;
@@ -644,6 +1045,7 @@
       state.goalDailyAttempt = Number(settings.dailyAttemptGoal || 0);
       state.todayAttempts = Number(today.totalAttempts || 0);
       state.dueReviewCount = Number(review.length || 0);
+      state.hudAutoMinimizeEnabled = settings.hudAutoMinimizeEnabled !== false;
       state.goalProgressPct = state.goalDailyAttempt > 0
         ? Math.min(100, Math.round((state.todayAttempts / state.goalDailyAttempt) * 100))
         : 0;
@@ -702,6 +1104,7 @@
 
     // Current round for test mode
     const round = detectRound();
+    const questionProgress = detectQuestionProgress();
 
     state.context = {
       url,
@@ -710,7 +1113,10 @@
       sessionTitle,
       partType,
       currentItem,
-      round
+      round,
+      questionIndex: questionProgress.current,
+      questionTotal: questionProgress.total,
+      questionLabel: questionProgress.label
     };
 
     refreshExamLockFromContext();
@@ -763,6 +1169,8 @@
     const activeTab = document.querySelector('.ant-tabs-tab-active, [class*="active-tab"], .active');
     const activeText = activeTab ? activeTab.textContent.trim().toLowerCase() : '';
 
+    if (/\/user\/exam\b/i.test(url)) return 'test';
+
     // Check active tab/button text
     if (/kiểm tra/i.test(activeText)) return 'test';
     if (/luyện tập/i.test(activeText)) return 'practice';
@@ -778,11 +1186,11 @@
     for (const btn of buttons) {
       const text = btn.textContent.trim().toLowerCase();
       if (/kiểm tra/.test(text) && btn.classList.contains('ant-btn-primary')) return 'test';
-      if (text === 'tiếp theo') return 'test';
+      if (text === 'tiếp theo' || text === 'nộp bài' || text === 'trước') return 'test';
     }
 
     // Check if vocab table exists with inputs
-    const vocabInputs = document.querySelectorAll(getInputSelector());
+    const vocabInputs = getTrackableInputs();
     if (vocabInputs.length > 0) return 'vocab';
 
     // Check for textarea (essay)
@@ -790,7 +1198,7 @@
     if (textareas.length > 0) return 'essay';
 
     // Check URL for hints
-    if (/exam/i.test(url)) return 'practice';
+    if (/exam/i.test(url)) return 'test';
     if (/lesson/i.test(url)) return 'practice';
 
     return 'unknown';
@@ -812,6 +1220,9 @@
       }
     }
 
+    const questionProgress = detectQuestionProgress();
+    if (questionProgress.label) return questionProgress.label;
+
     return '';
   }
 
@@ -832,9 +1243,19 @@
 
   // ============ Vocab Input Tracking ============
 
+  function resetVisibleInputTracking() {
+    document.querySelectorAll('input[data-tg-tracked="true"]').forEach((input) => {
+      delete input.dataset.tgTracked;
+      delete input.dataset.tgInputId;
+    });
+    state.inputTrackers.clear();
+    state.answeredInputIds.clear();
+    state.lastFocusedInputId = '';
+  }
+
   function setupVocabTracking() {
     // Find all answer inputs
-    const inputs = document.querySelectorAll(getInputSelector());
+    const inputs = getTrackableInputs();
     state.totalInputs = inputs.length;
     updateSelectorWarningState();
     updateBadge();
@@ -848,49 +1269,80 @@
 
     inputs.forEach((input, index) => {
       if (input.dataset.tgTracked) return;
-      
-      const inputId = input.id || `input-idx-${index}`;
-      input.dataset.tgTracked = 'true';
-      input.dataset.tgInputId = inputId; // Store ID on DOM element for easy access
 
-      const vietnamese = extractVietnameseForInput(input);
+      const meta = extractQuestionMetaForInput(input, index);
+      const inputId = buildInputTrackingId(input, index, meta);
+      input.dataset.tgTracked = 'true';
+      input.dataset.tgInputId = inputId;
+
+      const vietnamese = extractVietnameseForInput(input, meta, index);
 
       state.inputTrackers.set(inputId, {
+        inputId,
         wrongCount: 0,
         correctCount: 0,
         lastValue: '',
-        vietnamese: vietnamese,
+        vietnamese,
         english: '',
         attempts: [],
-        lastReportedStatusKey: '' // Prevent duplicate reporting
+        lastReportedStatusKey: '',
+        baseVerb: meta.baseVerb || '',
+        meta
       });
 
       log(`Tracking input [${inputId}]: "${vietnamese}"`);
 
       let typingTimer;
+      input.addEventListener('focus', () => rememberFocusedInput(inputId));
+      input.addEventListener('click', () => rememberFocusedInput(inputId));
       input.addEventListener('input', () => {
         clearTimeout(typingTimer);
         const tracker = state.inputTrackers.get(inputId);
         const value = input.value.trim();
+        rememberFocusedInput(inputId);
+        upsertExamDraftAnswer(input, tracker, 'input');
         if (tracker && value.length > 0 && value !== tracker.lastValue) {
           tracker.lastValue = value;
-          sendEvent('answer_attempt', { inputId, vietnamese, userInput: value, attemptNumber: tracker.attempts.length + 1 });
+          sendEvent('answer_attempt', {
+            inputId,
+            vietnamese,
+            promptText: tracker.meta?.promptText || '',
+            baseVerb: tracker.baseVerb || '',
+            questionIndex: tracker.meta?.questionIndex || null,
+            questionTotal: tracker.meta?.questionTotal || null,
+            blankIndex: tracker.meta?.blankIndex || 1,
+            userInput: value,
+            attemptNumber: tracker.attempts.length + 1
+          });
         }
         // Debounced validation check (some SPA validates as you type)
         typingTimer = setTimeout(() => { checkInputState(input); }, 750);
       });
 
-      input.addEventListener('blur', () => setTimeout(() => checkInputState(input), 200));
+      input.addEventListener('blur', () => {
+        upsertExamDraftAnswer(input, state.inputTrackers.get(inputId), 'blur');
+        setTimeout(() => checkInputState(input), 200);
+      });
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === 'Tab') setTimeout(() => checkInputState(input), 200);
       });
+
+      if (input.value && input.value.trim()) {
+        upsertExamDraftAnswer(input, state.inputTrackers.get(inputId), 'existing_value');
+      }
     });
 
     // Setup MutationObserver for dynamic class changes (correct/incorrect)
     setupClassObserver(inputs);
   }
 
-  function extractVietnameseForInput(input) {
+  function extractVietnameseForInput(input, meta = null, index = 0) {
+    if (state.context?.partType === 'test' && meta?.promptText) {
+      return meta.questionIndex
+        ? `Câu ${meta.questionIndex}${meta.questionTotal ? `/${meta.questionTotal}` : ''} - ${meta.promptText}`
+        : meta.promptText;
+    }
+
     // Strategy 1: Previous TD cell in same row 
     const cell = input.closest('td');
     if (cell) {
@@ -927,15 +1379,16 @@
     const ariaLabel = input.getAttribute('aria-label');
     if (ariaLabel && ariaLabel !== 'Nhập đáp án') return ariaLabel;
 
-    return `Word #${Array.from(document.querySelectorAll(getInputSelector())).indexOf(input) + 1}`;
+    return `Word #${Array.from(getTrackableInputs()).indexOf(input) + 1 || index + 1}`;
   }
 
   function checkInputState(input) {
-    const inputId = input.id || input.dataset.tgInputId;
+    const inputId = input.dataset.tgInputId || input.id;
     const tracker = state.inputTrackers.get(inputId);
     if (!tracker) return;
 
     const value = input.value.trim();
+    upsertExamDraftAnswer(input, tracker, 'state_check');
     if (!value) return;
 
     const isCorrect = checkIsCorrect(input);
@@ -975,6 +1428,11 @@
       vietnamese: tracker.vietnamese,
       english: tracker.english || correctAnswer || value, // Fallback to provided value
       correctAnswer: correctAnswer || '',
+      promptText: tracker.meta?.promptText || '',
+      baseVerb: tracker.baseVerb || '',
+      questionIndex: tracker.meta?.questionIndex || null,
+      questionTotal: tracker.meta?.questionTotal || null,
+      blankIndex: tracker.meta?.blankIndex || 1,
       userInput: value,
       isCorrect: resultCorrect,
       wrongCount: tracker.wrongCount,
@@ -988,12 +1446,13 @@
   function checkIsCorrect(input) {
     // PRIORITY 1: Explicit incorrect class = NEVER correct (override everything)
     // thaygiap.com uses: ng-valid ng-dirty INCORRECT ng-touched
-    if (input.classList.contains('incorrect')) return false;
-    if (input.classList.contains('wrong')) return false;
+    if (hasClassToken(input, 'incorrect')) return false;
+    if (hasClassToken(input, 'wrong')) return false;
+    if (input.getAttribute('aria-invalid') === 'true') return false;
 
     // PRIORITY 2: Explicit correct class
-    if (input.classList.contains('correct')) return true;
-    if (input.classList.contains('is-valid')) return true;
+    if (hasClassToken(input, 'correct')) return true;
+    if (hasClassToken(input, 'is-valid')) return true;
 
     // PRIORITY 3: Color-based (green border = rgb(59,195,113))
     const styles = window.getComputedStyle(input);
@@ -1012,7 +1471,7 @@
     }
 
     // PRIORITY 4: parent class (but NOT using [class*="valid"] which matches ng-valid on wrong answers!)
-    const correctWrapper = input.closest('.correct, .success');
+    const correctWrapper = closestWithClassToken(input, ['correct', 'success']);
     if (correctWrapper) return true;
 
     return null; // Status not yet determined
@@ -1020,13 +1479,14 @@
 
   function checkIsIncorrect(input) {
     // PRIORITY 1: Explicit class (most reliable - thaygiap adds .incorrect on wrong)
-    if (input.classList.contains('incorrect')) return true;
-    if (input.classList.contains('wrong')) return true;
-    if (input.classList.contains('is-invalid')) return true;
+    if (hasClassToken(input, 'incorrect')) return true;
+    if (hasClassToken(input, 'wrong')) return true;
+    if (hasClassToken(input, 'is-invalid')) return true;
+    if (input.getAttribute('aria-invalid') === 'true') return true;
 
     // PRIORITY 2: Explicit correct class means NOT incorrect  
-    if (input.classList.contains('correct')) return false;
-    if (input.classList.contains('is-valid')) return false;
+    if (hasClassToken(input, 'correct')) return false;
+    if (hasClassToken(input, 'is-valid')) return false;
 
     // PRIORITY 3: Color-based (red border = rgb(250,82,82))
     const styles = window.getComputedStyle(input);
@@ -1048,7 +1508,7 @@
     if (correctAnswerText && correctAnswerText.length > 0) return true;
 
     // PRIORITY 5: Parent class check (avoid ng-valid false positive!)
-    const incorrectWrapper = input.closest('.incorrect, .wrong, .has-error, .ant-form-item-has-error');
+    const incorrectWrapper = closestWithClassToken(input, ['incorrect', 'wrong', 'has-error', 'ant-form-item-has-error']);
     if (incorrectWrapper) return true;
 
     return null; // Status not yet determined
@@ -1103,7 +1563,7 @@
     }
 
     // Observe the entire form/table for class changes
-    const tableOrForm = document.querySelector('table, form, [class*="quiz"], [class*="exam"], main, .ant-layout-content');
+    const tableOrForm = document.querySelector('table, form, [class*="quiz"], [class*="exam"], main, [role="main"], .ant-layout-content');
     if (!tableOrForm) return;
 
     state.observer = new MutationObserver((mutations) => {
@@ -1124,9 +1584,9 @@
           // Check if new inputs were added
           for (const node of mutation.addedNodes) {
             if (node.nodeType === Node.ELEMENT_NODE) {
-              const newInputs = node.querySelectorAll ? 
-                node.querySelectorAll(getInputSelector()) :
-                [];
+              const newInputs = node.matches?.(buildRawInputSelector())
+                ? [node]
+                : getTrackableInputs(node);
               if (newInputs.length > 0) {
                 log('New inputs detected, re-setting up tracking...');
                 setTimeout(setupVocabTracking, 300);
@@ -1169,7 +1629,7 @@
     if (parent) {
       const input = parent.querySelector('input[data-tg-tracked]');
       if (input) {
-        const inputId = input.id || input.dataset.tgInputId;
+        const inputId = input.dataset.tgInputId || input.id;
         const tracker = state.inputTrackers.get(inputId);
         if (tracker) {
           tracker.english = correctWord;
@@ -1190,7 +1650,8 @@
       /kiểm tra/i,
       /luyện tập/i,
       /làm lại/i,
-      /tiếp theo/i,
+      /trước/i,
+      /tiếp/i,
       /nộp bài/i,
       /submit/i,
       /lần\s+\d+/i
@@ -1206,7 +1667,7 @@
 
       btn.dataset.tgButtonTracked = 'true';
 
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => {
         log(`Button clicked: "${btnText}"`);
 
         // Determine button type
@@ -1214,21 +1675,28 @@
         if (/kiểm tra/i.test(btnText)) buttonType = 'check';
         else if (/luyện tập/i.test(btnText)) buttonType = 'practice';
         else if (/làm lại/i.test(btnText)) buttonType = 'retry';
-        else if (/tiếp theo/i.test(btnText)) buttonType = 'next';
-        else if (/nộp bài/i.test(btnText)) buttonType = 'submit';
+        else if (/trước/i.test(btnText)) buttonType = 'previous';
+        else if (/tiếp/i.test(btnText)) buttonType = 'next';
+        else if (/nộp bài|submit/i.test(btnText)) buttonType = 'submit';
         else if (/lần\s+\d+/i.test(btnText)) {
           buttonType = 'round_switch';
         }
 
+        const answersSnapshot = snapshotCurrentVisibleAnswers(`button_${buttonType}`);
+        const progress = detectQuestionProgress();
+
         sendEvent('submit_click', {
           buttonText: btnText,
           buttonType,
+          questionIndex: progress.current,
+          questionTotal: progress.total,
+          answersSnapshot,
           sessionCorrect: state.sessionCorrect,
           sessionWrong: state.sessionWrong
         });
 
         // If it's a mode/round switch, update context and re-init
-        if (['practice', 'check', 'round_switch', 'next', 'retry'].includes(buttonType)) {
+        if (['practice', 'check', 'round_switch', 'next', 'previous', 'retry'].includes(buttonType)) {
           // Reset session counters for retry
           if (buttonType === 'retry') {
             state.sessionCorrect = 0;
@@ -1240,6 +1708,8 @@
               tracker.lastValue = '';
             });
           }
+
+          resetVisibleInputTracking();
 
           // Re-detect context after click
           setTimeout(() => {
@@ -1257,7 +1727,7 @@
             }, 1000);
           }, 500);
         }
-      });
+      }, true); // Use capture phase to ensure it runs before framework routing
     });
   }
 
@@ -1330,6 +1800,100 @@
     });
   }
 
+  function escapeHtmlText(value) {
+    const div = document.createElement('div');
+    div.textContent = String(value || '');
+    return div.innerHTML;
+  }
+
+  function renderVerbLookupResult(term = '') {
+    const badge = state.badgeElement || document.getElementById('tg-tracker-badge');
+    if (!badge) return;
+
+    const resultEl = badge.querySelector('#tg-verb-result');
+    const inputEl = badge.querySelector('#tg-verb-input');
+    if (!resultEl || !inputEl) return;
+
+    const verb = String(term || inputEl.value || '').trim().toLowerCase();
+    if (!verb) {
+      resultEl.innerHTML = 'Đặt con trỏ vào ô điền hoặc nhập động từ để tra nhanh.';
+      return;
+    }
+
+    const lookup = lookupIrregularVerb(verb);
+    if (!lookup) {
+      resultEl.innerHTML = 'Không tìm thấy động từ phù hợp.';
+      return;
+    }
+
+    const sourceLabel = lookup.irregular
+      ? 'Bất quy tắc'
+      : 'Không thấy trong bảng BTQ, nhiều khả năng là động từ có quy tắc';
+
+    resultEl.innerHTML = `
+      <div class="tg-verb-result-title">${escapeHtmlText(lookup.base)}</div>
+      <div class="tg-verb-result-row">V2: <strong>${escapeHtmlText(lookup.past)}</strong></div>
+      <div class="tg-verb-result-row">V3: <strong>${escapeHtmlText(lookup.participle)}</strong></div>
+      <div class="tg-verb-result-note">${escapeHtmlText(sourceLabel)}</div>
+    `;
+  }
+
+  function fillVerbLookupFromCurrentInput(showNotice = true) {
+    const badge = state.badgeElement || document.getElementById('tg-tracker-badge');
+    if (!badge) return '';
+
+    const inputEl = badge.querySelector('#tg-verb-input');
+    if (!inputEl) return '';
+
+    const activeInput = getActiveTrackedInput();
+    const detectedVerb = getSuggestedVerbFromInput(activeInput);
+    if (!detectedVerb) {
+      if (showNotice) showToast('Không tìm thấy động từ gốc ở ô hiện tại.');
+      renderVerbLookupResult(inputEl.value || '');
+      return '';
+    }
+
+    inputEl.value = detectedVerb;
+    renderVerbLookupResult(detectedVerb);
+    return detectedVerb;
+  }
+
+  function toggleVerbLookupPanel(forceOpen) {
+    const badge = state.badgeElement || document.getElementById('tg-tracker-badge');
+    if (!badge) return;
+
+    const panel = badge.querySelector('#tg-verb-panel');
+    const inputEl = badge.querySelector('#tg-verb-input');
+    if (!panel || !inputEl) return;
+
+    state.verbLookupOpen = typeof forceOpen === 'boolean' ? forceOpen : !state.verbLookupOpen;
+    panel.hidden = !state.verbLookupOpen;
+
+    if (state.verbLookupOpen) {
+      badge.classList.remove('tg-minimized');
+      clearTimeout(state.hudAutoMinimizeTimerId);
+      fillVerbLookupFromCurrentInput(false);
+      if (!inputEl.value) renderVerbLookupResult('');
+      setTimeout(() => inputEl.focus(), 0);
+      return;
+    }
+
+    scheduleHudAutoMinimize();
+  }
+
+  function scheduleHudAutoMinimize() {
+    clearTimeout(state.hudAutoMinimizeTimerId);
+    if (!state.hudAutoMinimizeEnabled || state.verbLookupOpen) return;
+
+    const badge = state.badgeElement || document.getElementById('tg-tracker-badge');
+    if (!badge) return;
+
+    state.hudAutoMinimizeTimerId = setTimeout(() => {
+      if (state.verbLookupOpen) return;
+      badge.classList.add('tg-minimized');
+    }, 2200);
+  }
+
   // ============ Floating Badge ============
 
   function createBadge() {
@@ -1399,8 +1963,18 @@
           <button class="tg-action-btn" id="tg-btn-mark-hard">★ Khó</button>
           <button class="tg-action-btn" id="tg-btn-quick5">Ôn nhanh 5</button>
           <button class="tg-action-btn" id="tg-btn-review-3m">Ôn 3 phút</button>
+          <button class="tg-action-btn" id="tg-btn-irregular">ĐTBTQ</button>
           <button class="tg-action-btn" id="tg-btn-fullscreen">Toàn màn hình</button>
           <button class="tg-action-btn" id="tg-btn-focus">Focus: Tắt</button>
+        </div>
+
+        <div id="tg-verb-panel" class="tg-verb-panel" hidden>
+          <div class="tg-verb-head">
+            <span>Tra cứu động từ</span>
+            <button class="tg-mini-btn" id="tg-btn-verb-current" title="Lấy động từ từ câu hiện tại">↺</button>
+          </div>
+          <input id="tg-verb-input" class="tg-verb-input" type="text" placeholder="Ví dụ: write, written, gave">
+          <div id="tg-verb-result" class="tg-verb-result">Đặt con trỏ vào ô điền hoặc nhập động từ để tra nhanh.</div>
         </div>
 
         <div id="tg-selector-warning" class="tg-selector-warning" style="display:none;">
@@ -1416,7 +1990,13 @@
     const toggle = badge.querySelector('#tg-hud-toggle');
     if (toggle) {
       toggle.addEventListener('click', () => {
+        clearTimeout(state.hudAutoMinimizeTimerId);
+        const willMinimize = !badge.classList.contains('tg-minimized');
         badge.classList.toggle('tg-minimized');
+        if (willMinimize) {
+          state.verbLookupOpen = false;
+          badge.querySelector('#tg-verb-panel')?.setAttribute('hidden', 'hidden');
+        }
       });
     }
 
@@ -1424,6 +2004,11 @@
     badge.querySelector('#tg-btn-mark-hard')?.addEventListener('click', () => addCurrentWordToReview('Đã đánh dấu khó'));
     badge.querySelector('#tg-btn-quick5')?.addEventListener('click', () => openOptionsWithPreset('review-hard5'));
     badge.querySelector('#tg-btn-review-3m')?.addEventListener('click', () => openOptionsWithPreset('review-due-3m'));
+    badge.querySelector('#tg-btn-irregular')?.addEventListener('click', () => toggleVerbLookupPanel());
+    badge.querySelector('#tg-btn-verb-current')?.addEventListener('click', () => fillVerbLookupFromCurrentInput(true));
+    badge.querySelector('#tg-verb-input')?.addEventListener('input', (e) => {
+      renderVerbLookupResult(e.target.value);
+    });
     badge.querySelector('#tg-btn-fullscreen')?.addEventListener('click', () => requestExamFullscreen('manual'));
     badge.querySelector('#tg-btn-focus')?.addEventListener('click', () => toggleFocusMode());
 
@@ -1436,6 +2021,7 @@
 
     refreshHudExternalData(true);
     updateBadge();
+    scheduleHudAutoMinimize();
   }
 
   function updateBadge() {
@@ -1467,11 +2053,19 @@
     const fullscreenStatusEl = badge.querySelector('#tg-fullscreen-status');
     const fullscreenExitsEl = badge.querySelector('#tg-fullscreen-exits');
     const fullscreenBtnEl = badge.querySelector('#tg-btn-fullscreen');
+    const irregularBtnEl = badge.querySelector('#tg-btn-irregular');
 
     const total = state.sessionCorrect + state.sessionWrong;
     const accuracy = total > 0 ? Math.round((state.sessionCorrect / total) * 100) : 0;
-    const completed = state.answeredInputIds.size;
-    const totalInputs = Math.max(state.totalInputs, state.inputTrackers.size);
+    const estimatedExamTotal = state.context?.partType === 'test' && state.context?.questionTotal
+      ? Math.max(state.totalInputs, state.inputTrackers.size) * state.context.questionTotal
+      : Math.max(state.totalInputs, state.inputTrackers.size);
+    const completed = state.context?.partType === 'test'
+      ? collectExamDraftAnswers().filter(item => item.typedValue).length
+      : state.answeredInputIds.size;
+    const totalInputs = state.context?.partType === 'test'
+      ? Math.max(estimatedExamTotal, completed, state.totalInputs)
+      : Math.max(state.totalInputs, state.inputTrackers.size);
     const remaining = Math.max(0, totalInputs - completed);
 
     if (correctEl) correctEl.textContent = state.sessionCorrect;
@@ -1485,7 +2079,10 @@
       const partLabelMap = { practice: 'Luyện tập', test: 'Kiểm tra', vocab: 'Từ vựng', essay: 'Viết', unknown: 'Khác' };
       const partLabel = partLabelMap[state.context?.partType || 'unknown'] || 'Khác';
       const roundLabel = state.context?.round ? `Lần ${state.context.round}` : '';
-      partRoundEl.textContent = [partLabel, roundLabel].filter(Boolean).join(' • ') || '-';
+      const questionLabel = state.context?.questionIndex
+        ? `Câu ${state.context.questionIndex}${state.context.questionTotal ? `/${state.context.questionTotal}` : ''}`
+        : '';
+      partRoundEl.textContent = [partLabel, roundLabel, questionLabel].filter(Boolean).join(' • ') || '-';
     }
 
     if (examLockStatusEl) {
@@ -1528,6 +2125,10 @@
       fullscreenBtnEl.title = canUse
         ? 'Bật lại toàn màn hình'
         : 'Chỉ dùng khi đang kiểm tra và đã bật setting fullscreen';
+    }
+
+    if (irregularBtnEl) {
+      irregularBtnEl.textContent = state.verbLookupOpen ? 'ĐTBTQ: Bật' : 'ĐTBTQ';
     }
 
     if (progressTextEl) progressTextEl.textContent = `${completed}/${totalInputs || 0}`;
@@ -1612,6 +2213,9 @@
     state.suppressFullscreenExitRecord = false;
     state.totalInputs = 0;
     state.inputTrackers.clear();
+    state.lastFocusedInputId = '';
+    state.examDraftAnswers.clear();
+    state.verbLookupOpen = false;
     state.lessonOpenTime = Date.now();
     state.lastInitializedURL = location.href;
     state.lastInitializedAt = Date.now();
@@ -1642,7 +2246,7 @@
   }
 
   function waitForContent(callback, maxRetries = 10, retryCount = 0) {
-    const hasInputs = document.querySelectorAll(getInputSelector()).length > 0;
+    const hasInputs = getTrackableInputs().length > 0;
     const hasButtons = document.querySelectorAll(getReadyButtonSelector()).length > 0;
 
     if (hasInputs || hasButtons || retryCount >= maxRetries) {
@@ -1686,14 +2290,22 @@
     if (message.action === 'settings_updated' && message.settings) {
       const oldState = state.isTracking;
       const oldFullscreenState = state.examFullscreenEnabled;
+      const oldHudAutoMinimize = state.hudAutoMinimizeEnabled;
       state.isTracking = message.settings.trackingEnabled !== false;
       state.examLockEnabled = message.settings.examLockEnabled !== false;
       state.examFullscreenEnabled = message.settings.examFullscreenEnabled !== false;
+      state.hudAutoMinimizeEnabled = message.settings.hudAutoMinimizeEnabled !== false;
       if (oldState !== state.isTracking) {
         log('Tracking settings synced:', state.isTracking ? 'enabled' : 'disabled');
       }
       if (!oldFullscreenState && state.examFullscreenEnabled) {
         ensureExamFullscreen('auto');
+      }
+      if (!oldHudAutoMinimize && state.hudAutoMinimizeEnabled) {
+        scheduleHudAutoMinimize();
+      }
+      if (oldHudAutoMinimize && !state.hudAutoMinimizeEnabled) {
+        clearTimeout(state.hudAutoMinimizeTimerId);
       }
       syncExamLockState('settings_updated');
       updateBadge();
@@ -1737,16 +2349,27 @@
     if (!state.contentRefreshIntervalId) {
       state.contentRefreshIntervalId = setInterval(() => {
         const currentInputCount = document.querySelectorAll('input[data-tg-tracked]').length;
-        const totalInputs = document.querySelectorAll(getInputSelector()).length;
+        const totalInputs = getTrackableInputs().length;
         const partType = detectPartType();
         const round = detectRound();
+        const questionProgress = detectQuestionProgress();
 
-        if (!state.context || partType !== state.context.partType || round !== state.context.round) {
+        if (
+          !state.context ||
+          partType !== state.context.partType ||
+          round !== state.context.round ||
+          questionProgress.current !== state.context.questionIndex ||
+          questionProgress.total !== state.context.questionTotal
+        ) {
+          resetVisibleInputTracking();
           state.context = {
             ...(state.context || {}),
             url: location.href,
             partType,
-            round
+            round,
+            questionIndex: questionProgress.current,
+            questionTotal: questionProgress.total,
+            questionLabel: questionProgress.label
           };
           refreshExamLockFromContext();
         }
@@ -1791,6 +2414,13 @@
       return;
     }
 
+    if (e.code === 'KeyV') {
+      e.preventDefault();
+      toggleVerbLookupPanel(true);
+      fillVerbLookupFromCurrentInput(true);
+      return;
+    }
+
     if (e.code === 'KeyQ') {
       e.preventDefault();
       openOptionsWithPreset('review-hard5');
@@ -1801,7 +2431,10 @@
     const toast = document.createElement('div');
     toast.textContent = msg;
     const hud = document.getElementById('tg-tracker-badge');
-    const offsetBottom = hud ? (hud.classList.contains('tg-minimized') ? '76px' : '390px') : '80px';
+    const verbPanelOpen = !!hud?.querySelector('#tg-verb-panel:not([hidden])');
+    const offsetBottom = hud
+      ? (hud.classList.contains('tg-minimized') ? '76px' : (verbPanelOpen ? '470px' : '390px'))
+      : '80px';
     toast.style.cssText = `
       position: fixed; bottom: ${offsetBottom}; right: 20px; background: #10b981; color: white;
       padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
