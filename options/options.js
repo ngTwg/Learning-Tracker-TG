@@ -6,6 +6,8 @@
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await loadTheme();
+  setupThemeToggle();
   setupTabNavigation();
   setupDeepLinkRouting();
   await loadOverviewTab();
@@ -19,6 +21,53 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 let rvSettingsInitialized = false;
 let vocabCompactMode = false;
+
+// ============ Theme Management ============
+async function loadTheme() {
+  try {
+    const result = await chrome.storage.local.get(['theme']);
+    const theme = result.theme || 'dark';
+    applyTheme(theme);
+  } catch (err) {
+    console.error('Error loading theme:', err);
+  }
+}
+
+function applyTheme(theme) {
+  const html = document.documentElement;
+  const body = document.body;
+  const themeIcon = document.getElementById('theme-icon');
+
+  if (theme === 'light') {
+    html.classList.add('light-theme');
+    body.classList.add('light-theme');
+    if (themeIcon) themeIcon.textContent = '☀️';
+  } else {
+    html.classList.remove('light-theme');
+    body.classList.remove('light-theme');
+    if (themeIcon) themeIcon.textContent = '🌙';
+  }
+}
+
+async function toggleTheme() {
+  try {
+    const result = await chrome.storage.local.get(['theme']);
+    const currentTheme = result.theme || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+    await chrome.storage.local.set({ theme: newTheme });
+    applyTheme(newTheme);
+  } catch (err) {
+    console.error('Error toggling theme:', err);
+  }
+}
+
+function setupThemeToggle() {
+  const btnTheme = document.getElementById('btn-theme-toggle');
+  if (btnTheme) {
+    btnTheme.addEventListener('click', toggleTheme);
+  }
+}
 
 // ============ Message Helper ============
 function sendMessage(message) {
@@ -76,7 +125,7 @@ async function applyInitialRoute() {
 // ============ Tab Navigation ============
 function setupTabNavigation() {
   const menuItems = document.querySelectorAll('.sidebar-item[data-tab]');
-  
+
   menuItems.forEach(item => {
     item.addEventListener('click', () => {
       const tabId = item.dataset.tab;
@@ -91,20 +140,20 @@ function setupTabNavigation() {
 
 async function loadTabData(tabId) {
   switch (tabId) {
-    case 'overview':     await loadOverviewTab(); break;
-    case 'vocab':        await loadVocabTab(); break;
+    case 'overview': await loadOverviewTab(); break;
+    case 'vocab': await loadVocabTab(); break;
     case 'wrong-inputs': await loadWrongInputsTab(); break;
-    case 'review':       await loadReviewTab(); break;
-    case 'goals':        await loadGoalsTab(); break;
-    case 'weakness':     await loadWeaknessTab(); break;
-    case 'offline':      await loadOfflineTab(); break;
-    case 'sessions':     await loadSessionsTab(); break;
-    case 'history':      await loadHistoryTab(); break;
-    case 'settings':     await loadSettingsTab(); break;
+    case 'review': await loadReviewTab(); break;
+    case 'goals': await loadGoalsTab(); break;
+    case 'weakness': await loadWeaknessTab(); break;
+    case 'offline': await loadOfflineTab(); break;
+    case 'sessions': await loadSessionsTab(); break;
+    case 'history': await loadHistoryTab(); break;
+    case 'settings': await loadSettingsTab(); break;
     case 'sentence-forge': await loadSentenceForgeTab(); break;
-    case 'vocab-dungeon':  await loadVocabDungeonTab(); break;
-    case 'grammar-vault':  await loadGrammarVaultTab(); break;
-    case 'skill-matrix':   await loadSkillMatrixTab(); break;
+    case 'vocab-dungeon': await loadVocabDungeonTab(); break;
+    case 'grammar-vault': await loadGrammarVaultTab(); break;
+    case 'skill-matrix': await loadSkillMatrixTab(); break;
   }
 }
 
@@ -187,10 +236,10 @@ function loadMasteryBreakdown(entries) {
 
   container.innerHTML = `
     <div style="display:flex;gap:0;height:32px;border-radius:16px;overflow:hidden;margin-bottom:12px;">
-      ${counts.mastered > 0 ? `<div class="mastery-bar mastered" style="width:${counts.mastered/total*100}%">${counts.mastered}</div>` : ''}
-      ${counts.reviewing > 0 ? `<div class="mastery-bar reviewing" style="width:${counts.reviewing/total*100}%">${counts.reviewing}</div>` : ''}
-      ${counts.learning > 0 ? `<div class="mastery-bar learning" style="width:${counts.learning/total*100}%">${counts.learning}</div>` : ''}
-      ${counts.new > 0 ? `<div class="mastery-bar new" style="width:${counts.new/total*100}%">${counts.new}</div>` : ''}
+      ${counts.mastered > 0 ? `<div class="mastery-bar mastered" style="width:${counts.mastered / total * 100}%">${counts.mastered}</div>` : ''}
+      ${counts.reviewing > 0 ? `<div class="mastery-bar reviewing" style="width:${counts.reviewing / total * 100}%">${counts.reviewing}</div>` : ''}
+      ${counts.learning > 0 ? `<div class="mastery-bar learning" style="width:${counts.learning / total * 100}%">${counts.learning}</div>` : ''}
+      ${counts.new > 0 ? `<div class="mastery-bar new" style="width:${counts.new / total * 100}%">${counts.new}</div>` : ''}
     </div>
     <div class="mastery-legend">
       <div class="legend-item"><span class="legend-dot mastered"></span> Thành thạo (${counts.mastered})</div>
@@ -361,8 +410,8 @@ function renderWrongInputs() {
 
   switch (sortVal) {
     case 'wrong-desc': entries.sort((a, b) => (b.wrongAttempts || 0) - (a.wrongAttempts || 0)); break;
-    case 'recent':     entries.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0)); break;
-    case 'alpha':      entries.sort((a, b) => (a.vietnamese || '').localeCompare(b.vietnamese || '', 'vi')); break;
+    case 'recent': entries.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0)); break;
+    case 'alpha': entries.sort((a, b) => (a.vietnamese || '').localeCompare(b.vietnamese || '', 'vi')); break;
   }
 
   const listEl = document.getElementById('wi-list');
@@ -414,15 +463,15 @@ function renderWrongInputs() {
     // Full history rows (in expanded body)
     const attemptsHtml = history.length > 0
       ? history.map(h => {
-          const time = h.at ? getRelativeTime(h.at) : '';
-          const correct = escapeHtml(h.correct || entry.english || '?');
-          return `<div class="wi-attempt-row">
+        const time = h.at ? getRelativeTime(h.at) : '';
+        const correct = escapeHtml(h.correct || entry.english || '?');
+        return `<div class="wi-attempt-row">
             <span class="wi-typed">"${escapeHtml(h.typed)}"</span>
             <span class="wi-arrow">→</span>
             <span class="wi-correct-ans">${correct}</span>
             <span class="wi-attempt-time">${time}</span>
           </div>`;
-        }).join('')
+      }).join('')
       : `<p style="color:var(--text-muted);font-size:13px;">Chưa có chi tiết (dữ liệu cũ).</p>`;
 
     const viEncoded = encodeURIComponent(entry.vietnamese || '');
@@ -433,7 +482,7 @@ function renderWrongInputs() {
     const reviewBadge = isInReview ? `<span class="wi-review-badge">🔁</span>` : '';
 
     return `
-      <div class="wi-card" id="wi-card-${btoa(encodeURIComponent(entry.vietnamese || '')).slice(0,10)}">
+      <div class="wi-card" id="wi-card-${btoa(encodeURIComponent(entry.vietnamese || '')).slice(0, 10)}">
         <div class="wi-card-header" onclick="this.parentElement.classList.toggle('expanded')">
           <div class="wi-card-left">
             <div class="wi-card-info">
@@ -465,21 +514,21 @@ function renderWrongInputs() {
 
 
 
-window.addToReview = async function(vietnamese) {
+window.addToReview = async function (vietnamese) {
   await sendMessage({ action: 'add_to_review_list', vietnamese });
   await loadWrongInputsTab();
 };
 
-window.removeFromReview = async function(vietnamese) {
+window.removeFromReview = async function (vietnamese) {
   await sendMessage({ action: 'mark_review_correct', vietnamese });
   await loadWrongInputsTab();
 };
 
-window.generateMnemonic = async function(viEncoded, enEncoded, btn) {
+window.generateMnemonic = async function (viEncoded, enEncoded, btn) {
   const vi = decodeURIComponent(viEncoded);
   const en = decodeURIComponent(enEncoded);
   const resultDiv = btn.nextElementSibling;
-  
+
   btn.disabled = true;
   btn.textContent = 'Đang phân tích...';
   resultDiv.style.display = 'block';
@@ -506,23 +555,23 @@ window.generateMnemonic = async function(viEncoded, enEncoded, btn) {
 
 // ─── Settings State ───────────────────────────────────────────────────
 const rvSettings = {
-  count:      20,          // number of words (0 = all)
-  minWrong:   1,           // min wrong attempts to include
-  order:      'shuffle',   // shuffle | wrong-desc | recent | alpha | streak-asc
-  direction:  'vi-en',     // vi-en | en-vi | mixed
-  mode:       'type',      // type | choice4 | reveal
-  mastery:    'all',       // all | new | learning | reviewing | not-mastered
+  count: 20,          // number of words (0 = all)
+  minWrong: 1,           // min wrong attempts to include
+  order: 'shuffle',   // shuffle | wrong-desc | recent | alpha | streak-asc
+  direction: 'vi-en',     // vi-en | en-vi | mixed
+  mode: 'type',      // type | choice4 | reveal
+  mastery: 'all',       // all | new | learning | reviewing | not-mastered
   autoAdvance: 0,          // ms delay (0 = off)
-  source:     'review-list' // review-list | all-wrong | all-vocab
+  source: 'review-list' // review-list | all-wrong | all-vocab
 };
 
 // ─── Session State ────────────────────────────────────────────────────
-let rvQueue       = [];    // [{word, direction}]
-let rvDoneIdx     = new Set();
-let rvCurIdx      = 0;
+let rvQueue = [];    // [{word, direction}]
+let rvDoneIdx = new Set();
+let rvCurIdx = 0;
 let rvSessionStats = { correct: 0, wrong: 0, skip: 0 };
-let rvAutoTimer   = null;
-let rvAllVocab    = {};    // cache of all vocab summaries
+let rvAutoTimer = null;
+let rvAllVocab = {};    // cache of all vocab summaries
 
 // ─── Initialize Review Tab ───────────────────────────────────────────
 async function loadReviewTab() {
@@ -540,14 +589,14 @@ function setupRvSettings() {
   rvSettingsInitialized = true;
 
   const groups = {
-    'rv-count-group':      'count',
-    'rv-min-wrong-group':  'minWrong',
-    'rv-order-group':      'order',
-    'rv-direction-group':  'direction',
-    'rv-mode-group':       'mode',
-    'rv-mastery-group':    'mastery',
-    'rv-advance-group':    'autoAdvance',
-    'rv-source-group':     'source'
+    'rv-count-group': 'count',
+    'rv-min-wrong-group': 'minWrong',
+    'rv-order-group': 'order',
+    'rv-direction-group': 'direction',
+    'rv-mode-group': 'mode',
+    'rv-mastery-group': 'mastery',
+    'rv-advance-group': 'autoAdvance',
+    'rv-source-group': 'source'
   };
 
   for (const [groupId, key] of Object.entries(groups)) {
@@ -579,8 +628,8 @@ function setupRvSettings() {
   });
 
   // Back to settings buttons
-  document.getElementById('btn-rv-back-settings')?.addEventListener('click',  () => showRvPanel('settings'));
-  document.getElementById('btn-rv-done-settings')?.addEventListener('click',  () => showRvPanel('settings'));
+  document.getElementById('btn-rv-back-settings')?.addEventListener('click', () => showRvPanel('settings'));
+  document.getElementById('btn-rv-done-settings')?.addEventListener('click', () => showRvPanel('settings'));
   document.getElementById('btn-review-restart')?.addEventListener('click', () => {
     rvDoneIdx.clear(); rvCurIdx = 0; resetRvStats(); renderRvCard();
   });
@@ -600,18 +649,18 @@ function setupRvSettings() {
     const isEnVi = rvQueue[rvCurIdx]?.direction === 'en-vi';
     const ans = isEnVi ? word?.vietnamese : word?.english;
     const ipa = (!isEnVi && word?.ipa) ? word.ipa : null;
-    
+
     const ra = document.getElementById('fc-reveal-answer');
-    if (ra) { 
-      ra.innerHTML = `${escapeHtml(ans || '?')} ${ipa ? `<div style="font-size:16px; font-style:italic; color:var(--text-muted); margin-top:4px; font-weight:normal;">/${escapeHtml(ipa)}/</div>` : ''}`; 
-      ra.style.display = 'block'; 
+    if (ra) {
+      ra.innerHTML = `${escapeHtml(ans || '?')} ${ipa ? `<div style="font-size:16px; font-style:italic; color:var(--text-muted); margin-top:4px; font-weight:normal;">/${escapeHtml(ipa)}/</div>` : ''}`;
+      ra.style.display = 'block';
     }
     document.getElementById('fc-reveal-btn').style.display = 'none';
     const sj = document.getElementById('fc-self-judge');
     if (sj) sj.style.display = 'flex';
   });
   document.getElementById('fc-judge-correct')?.addEventListener('click', () => rvRevealJudge(true));
-  document.getElementById('fc-judge-wrong')?.addEventListener('click',   () => rvRevealJudge(false));
+  document.getElementById('fc-judge-wrong')?.addEventListener('click', () => rvRevealJudge(false));
   document.getElementById('fc-skip-reveal')?.addEventListener('click', () => rvSkip());
 
   setupRvShortcuts();
@@ -704,7 +753,7 @@ function buildRvQueue() {
   let words = Object.values(rvAllVocab);
 
   // Source filter
-  if (rvSettings.source === 'review-list')  words = words.filter(w => w.inReviewList || (w.nextReviewDate && w.nextReviewDate <= Date.now()));
+  if (rvSettings.source === 'review-list') words = words.filter(w => w.inReviewList || (w.nextReviewDate && w.nextReviewDate <= Date.now()));
   else if (rvSettings.source === 'all-wrong') words = words.filter(w => (w.wrongAttempts || 0) > 0);
   // all-vocab: use all
 
@@ -719,11 +768,11 @@ function buildRvQueue() {
 
   // Order
   switch (rvSettings.order) {
-    case 'shuffle':    words = shuffleArray([...words]); break;
-    case 'wrong-desc': words.sort((a,b) => (b.wrongAttempts||0) - (a.wrongAttempts||0)); break;
-    case 'recent':     words.sort((a,b) => (b.lastSeen||0) - (a.lastSeen||0)); break;
-    case 'alpha':      words.sort((a,b) => (a.vietnamese||'').localeCompare(b.vietnamese||'', 'vi')); break;
-    case 'streak-asc': words.sort((a,b) => (a.streakCorrect||0) - (b.streakCorrect||0)); break;
+    case 'shuffle': words = shuffleArray([...words]); break;
+    case 'wrong-desc': words.sort((a, b) => (b.wrongAttempts || 0) - (a.wrongAttempts || 0)); break;
+    case 'recent': words.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0)); break;
+    case 'alpha': words.sort((a, b) => (a.vietnamese || '').localeCompare(b.vietnamese || '', 'vi')); break;
+    case 'streak-asc': words.sort((a, b) => (a.streakCorrect || 0) - (b.streakCorrect || 0)); break;
   }
 
   // Limit count
@@ -760,16 +809,16 @@ function startRvSession() {
 function resetRvStats() { rvSessionStats = { correct: 0, wrong: 0, skip: 0 }; updateRvSessionBar(); }
 
 function updateRvSessionBar() {
-  setText('rv-stat-total',   rvQueue.length);
+  setText('rv-stat-total', rvQueue.length);
   setText('rv-stat-correct', rvSessionStats.correct);
-  setText('rv-stat-wrong',   rvSessionStats.wrong);
-  setText('rv-stat-skip',    rvSessionStats.skip);
+  setText('rv-stat-wrong', rvSessionStats.wrong);
+  setText('rv-stat-skip', rvSessionStats.skip);
 }
 
 // ─── Panel visibility ─────────────────────────────────────────────────
 function showRvPanel(which) {
   // Hide all
-  ['rv-settings-panel','rv-session-bar','review-progress-wrap','review-flashcard','review-done','review-empty'].forEach(id => {
+  ['rv-settings-panel', 'rv-session-bar', 'review-progress-wrap', 'review-flashcard', 'review-done', 'review-empty'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -808,7 +857,7 @@ function renderRvCard() {
   setText('review-progress-text', `${done} / ${total} hoàn thành`);
   setText('review-remaining', `${total - done} còn lại`);
   const fill = document.getElementById('review-progress-fill');
-  if (fill) fill.style.width = `${total > 0 ? (done/total*100) : 0}%`;
+  if (fill) fill.style.width = `${total > 0 ? (done / total * 100) : 0}%`;
 
   if (found === -1) {
     // All done
@@ -833,20 +882,20 @@ function renderRvCard() {
 
   // Direction label + question word
   const labelEl = document.getElementById('fc-direction-label');
-  const fcWord  = document.getElementById('fc-vietnamese');
-  const ipaEl   = document.getElementById('fc-ipa');
-  
+  const fcWord = document.getElementById('fc-vietnamese');
+  const ipaEl = document.getElementById('fc-ipa');
+
   if (direction === 'en-vi') {
     if (labelEl) labelEl.textContent = 'Tiếng Anh (nghĩa là gì?)';
-    if (fcWord)  fcWord.textContent   = word.english || '';
+    if (fcWord) fcWord.textContent = word.english || '';
     if (ipaEl) {
       if (word.ipa) { ipaEl.textContent = `/${word.ipa}/`; ipaEl.style.display = 'block'; }
       else { ipaEl.style.display = 'none'; }
     }
   } else {
     if (labelEl) labelEl.textContent = 'Nghĩa tiếng Việt';
-    if (fcWord)  fcWord.textContent   = word.vietnamese || '';
-    if (ipaEl)   ipaEl.style.display  = 'none';
+    if (fcWord) fcWord.textContent = word.vietnamese || '';
+    if (ipaEl) ipaEl.style.display = 'none';
   }
 
   const audioBtn = document.getElementById('fc-audio');
@@ -867,14 +916,14 @@ function renderRvCard() {
   // Reset hint and feedback
   const hintEl = document.getElementById('fc-hint');
   if (hintEl) hintEl.textContent = '';
-  
+
   const fb = document.getElementById('fc-feedback');
   if (fb) fb.style.display = 'none';
 
   // Mode-specific UI
-  const typeArea    = document.getElementById('fc-type-area');
-  const choiceArea  = document.getElementById('fc-choices-area');
-  const revealArea  = document.getElementById('fc-reveal-area');
+  const typeArea = document.getElementById('fc-type-area');
+  const choiceArea = document.getElementById('fc-choices-area');
+  const revealArea = document.getElementById('fc-reveal-area');
   [typeArea, choiceArea, revealArea].forEach(el => { if (el) el.style.display = 'none'; });
 
   if (rvSettings.mode === 'type') {
@@ -890,12 +939,12 @@ function renderRvCard() {
 
   } else if (rvSettings.mode === 'reveal') {
     if (revealArea) revealArea.style.display = '';
-    const ra  = document.getElementById('fc-reveal-answer');
-    const sj  = document.getElementById('fc-self-judge');
-    const rb  = document.getElementById('fc-reveal-btn');
-    if (ra)  { ra.textContent = ''; ra.style.display = 'none'; }
-    if (sj)  sj.style.display = 'none';
-    if (rb)  rb.style.display = '';
+    const ra = document.getElementById('fc-reveal-answer');
+    const sj = document.getElementById('fc-self-judge');
+    const rb = document.getElementById('fc-reveal-btn');
+    if (ra) { ra.textContent = ''; ra.style.display = 'none'; }
+    if (sj) sj.style.display = 'none';
+    if (rb) rb.style.display = '';
   }
 
   // Past wrong chips
@@ -964,15 +1013,17 @@ function checkRvTypeAnswer() {
     updateRvSessionBar();
 
     const cb = document.getElementById('fc-check');
-    if (cb) { cb.textContent = '→ Thử lại'; cb.onclick = () => {
-      input.value = '';
-      input.className = 'fc-input';
-      input.disabled = false;
-      feedback.style.display = 'none';
-      cb.textContent = '✓ Kiểm tra';
-      cb.onclick = checkRvTypeAnswer;
-      input.focus();
-    }; }
+    if (cb) {
+      cb.textContent = '→ Thử lại'; cb.onclick = () => {
+        input.value = '';
+        input.className = 'fc-input';
+        input.disabled = false;
+        feedback.style.display = 'none';
+        cb.textContent = '✓ Kiểm tra';
+        cb.onclick = checkRvTypeAnswer;
+        input.focus();
+      };
+    }
   }
 }
 
@@ -995,19 +1046,19 @@ function renderChoice4(word, direction) {
     const safeOpt = escapeHtml(opt).replace(/"/g, '&quot;');
     return `
     <button class="fc-choice-btn" data-idx="${i}" data-val="${safeOpt}">
-      <span class="key-hint" style="margin-right:8px; margin-left:0;">${i+1}</span>
+      <span class="key-hint" style="margin-right:8px; margin-left:0;">${i + 1}</span>
       ${escapeHtml(opt)}
     </button>`;
   }).join('');
 
   document.querySelectorAll('.fc-choice-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function () {
       handleChoice4(this.dataset.val, correct);
     });
   });
 }
 
-window.handleChoice4 = function(selected, correct) {
+window.handleChoice4 = function (selected, correct) {
   const isCorrect = selected.trim().toLowerCase() === correct.trim().toLowerCase();
   const { word, direction } = rvQueue[rvCurIdx];
 
@@ -1033,7 +1084,7 @@ window.handleChoice4 = function(selected, correct) {
       sendMessage({ action: 'sm2_review', vietnamese: word.vietnamese, quality: 4 });
       rvQueue[rvCurIdx].graded = true;
     }
-    
+
     if (feedback) {
       feedback.className = 'fc-feedback correct-fb';
       feedback.innerHTML = `✅ Chính xác! <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
@@ -1127,8 +1178,8 @@ function levenshtein(a, b) {
   for (let j = 0; j <= n; j++) dp[0][j] = j;
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
-      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] :
-        1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] :
+        1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
     }
   }
   return dp[m][n];
@@ -1195,14 +1246,14 @@ function setupRvShortcuts() {
     // Only act if Review Flashcard is visible
     const fc = document.getElementById('review-flashcard');
     if (!fc || fc.style.display === 'none') return;
-    
+
     // Ignore if user is typing in input
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
     if (rvSettings.mode === 'reveal') {
       const revealBtn = document.getElementById('fc-reveal-btn');
       const sjGroup = document.getElementById('fc-self-judge');
-      
+
       if (e.code === 'Space' || e.key === 'Enter') {
         e.preventDefault();
         // If reveal button is visible, click it
@@ -1930,12 +1981,12 @@ function updateAiHelpText() {
   const provider = document.getElementById('setting-ai-provider')?.value || 'none';
   const container = document.getElementById('ai-key-container');
   const helpText = document.getElementById('ai-help-text');
-  
+
   if (provider === 'none') {
     if (container) container.style.display = 'none';
     return;
   }
-  
+
   if (container) container.style.display = 'block';
   if (!helpText) return;
 
@@ -1973,9 +2024,9 @@ async function loadSentenceForgeTab() {
   if (sfInput) sfInput.value = '';
   if (sfResult) sfResult.style.display = 'none';
   if (msgEl) msgEl.textContent = '';
-  
+
   await fetchSFWords();
-  
+
   const btnReroll = document.getElementById('btn-sf-reroll');
   if (btnReroll) {
     btnReroll.onclick = async () => {
@@ -1994,22 +2045,22 @@ async function loadSentenceForgeTab() {
         if (msgEl) msgEl.textContent = 'Vui lòng viết ít nhất một câu!';
         return;
       }
-      
+
       const missing = sentenceForgeWords.filter(w => !text.toLowerCase().includes((w.english || '').toLowerCase()));
       if (missing.length > 0) {
         if (msgEl) msgEl.textContent = `Bạn chưa dùng các từ: ${missing.map(m => m.english).join(', ')}`;
         return;
       }
-      
+
       btnSubmit.disabled = true;
       if (msgEl) msgEl.textContent = 'Đang gửi cho AI phân tích...';
-      
+
       const res = await sendMessage({
         action: 'ask_ai',
         aiType: 'grammar',
         wordOrContext: `Học sinh được yêu cầu viết câu dùng các từ: ${sentenceForgeWords.map(w => w.english).join(', ')}. Học sinh đã viết: "${text}". Hãy nhận xét xem học sinh viết đúng ngữ pháp không, dùng từ có tự nhiên không, và sửa lại câu cho hay hơn (nếu có lỗi).`
       });
-      
+
       btnSubmit.disabled = false;
       if (msgEl) msgEl.textContent = '';
       if (sfResult) {
@@ -2027,11 +2078,11 @@ async function loadSentenceForgeTab() {
 async function fetchSFWords() {
   const res = await sendMessage({ action: 'get_vocab_summaries' });
   const entries = Object.values(res?.data || {}).filter(w => w.english && w.vietnamese);
-  
+
   // Try to pick from learning/reviewing/most wrong
   entries.sort(() => Math.random() - 0.5);
   sentenceForgeWords = entries.slice(0, 3);
-  
+
   const listEl = document.getElementById('sf-words-list');
   if (listEl) {
     listEl.innerHTML = sentenceForgeWords.map(w => `
@@ -2058,7 +2109,7 @@ async function loadVocabDungeonTab() {
   if (startBtn) {
     startBtn.onclick = startDungeon;
   }
-  
+
   const input = document.getElementById('vd-input');
   if (input) {
     input.addEventListener('keydown', (e) => {
@@ -2070,10 +2121,10 @@ async function loadVocabDungeonTab() {
 async function startDungeon() {
   document.getElementById('vd-start-screen').style.display = 'none';
   document.getElementById('vd-game-screen').style.display = 'block';
-  
+
   const res = await sendMessage({ action: 'get_review_list' });
   let pool = res?.data || [];
-  
+
   if (pool.length < 20) {
     const sumRes = await sendMessage({ action: 'get_vocab_summaries' });
     const dict = sumRes?.data || {};
@@ -2083,7 +2134,7 @@ async function startDungeon() {
   } else {
     pool = pool.sort(() => Math.random() - 0.5).slice(0, 20);
   }
-  
+
   vdState = {
     running: true,
     words: pool,
@@ -2092,7 +2143,7 @@ async function startDungeon() {
     timeLeft: 10,
     timerInterval: null
   };
-  
+
   renderVdHud();
   nextVdFloor();
 }
@@ -2113,18 +2164,18 @@ function nextVdFloor() {
     endDungeon(false);
     return;
   }
-  
+
   if (vdState.currentFloor >= vdState.words.length || vdState.currentFloor >= 20) {
     endDungeon(true);
     return;
   }
-  
+
   renderVdHud();
-  
+
   const word = vdState.words[vdState.currentFloor];
   const nameEl = document.getElementById('vd-monster-name');
   if (nameEl) nameEl.textContent = word.vietnamese || '???';
-  
+
   const input = document.getElementById('vd-input');
   if (input) {
     input.value = '';
@@ -2132,7 +2183,7 @@ function nextVdFloor() {
     input.style.borderColor = '#334155';
     input.disabled = false;
   }
-  
+
   const monster = document.getElementById('vd-monster');
   if (monster) {
     const emojis = ['👿', '👹', '👺', '👾', '🧟', '🧛', '🐲', '☠️'];
@@ -2140,7 +2191,7 @@ function nextVdFloor() {
     monster.style.transform = 'translateY(0) scale(1)';
     monster.style.opacity = '1';
   }
-  
+
   startVdTimer();
 }
 
@@ -2148,11 +2199,11 @@ function startVdTimer() {
   if (vdState.timerInterval) clearInterval(vdState.timerInterval);
   vdState.timeLeft = 10; // 10 seconds per monster
   updateVdTimerBar();
-  
+
   vdState.timerInterval = setInterval(() => {
     vdState.timeLeft -= 0.1;
     updateVdTimerBar();
-    
+
     if (vdState.timeLeft <= 0) {
       clearInterval(vdState.timerInterval);
       handleVdDamage(); // Time's up! Monster hits.
@@ -2165,7 +2216,7 @@ function updateVdTimerBar() {
   if (!bar) return;
   const pct = Math.max(0, (vdState.timeLeft / 10) * 100);
   bar.style.width = `${pct}%`;
-  
+
   if (pct > 50) bar.style.background = '#10b981';
   else if (pct > 20) bar.style.background = '#f59e0b';
   else bar.style.background = '#ef4444';
@@ -2173,42 +2224,42 @@ function updateVdTimerBar() {
 
 function handleDungeonAnswer() {
   if (!vdState.running) return;
-  
+
   const input = document.getElementById('vd-input');
   if (!input) return;
-  
+
   const word = vdState.words[vdState.currentFloor];
   const typed = input.value.trim().toLowerCase();
   const arr = word.english.split('/').map(s => s.trim().toLowerCase());
-  
+
   if (arr.includes(typed)) {
     // Correct! Player attacks
     clearInterval(vdState.timerInterval);
     input.disabled = true;
     input.style.borderColor = '#10b981';
-    
+
     const isCrit = vdState.timeLeft >= 7; // Answered in < 3s
     showVdFx(isCrit ? 'Chí Mạng!' : 'Băm!', isCrit ? '#f59e0b' : '#fff');
-    
+
     // Animate monster death
     const monster = document.getElementById('vd-monster');
     if (monster) {
       monster.style.transform = 'translateY(20px) scale(0.5)';
       monster.style.opacity = '0';
     }
-    
+
     // Player attack animation
     const player = document.getElementById('vd-player');
     if (player) {
       player.style.transform = 'translateX(20px)';
       setTimeout(() => player.style.transform = 'translateX(0)', 200);
     }
-    
+
     setTimeout(() => {
       vdState.currentFloor++;
       nextVdFloor();
     }, 1000);
-    
+
   } else {
     // Wrong! Shake input
     input.style.borderColor = '#ef4444';
@@ -2221,23 +2272,23 @@ function handleDungeonAnswer() {
 function handleVdDamage() {
   clearInterval(vdState.timerInterval);
   showVdFx('-1 HP', '#ef4444');
-  
+
   const player = document.getElementById('vd-player');
   if (player) {
     player.style.transform = 'translateX(-20px) skewX(10deg)';
     setTimeout(() => player.style.transform = 'translateX(0) skewX(0)', 300);
   }
-  
+
   const input = document.getElementById('vd-input');
   if (input) {
     input.value = vdState.words[vdState.currentFloor].english; // Show answer
     input.disabled = true;
     input.style.borderColor = '#ef4444';
   }
-  
+
   vdState.hp--;
   renderVdHud();
-  
+
   setTimeout(() => {
     vdState.currentFloor++;
     nextVdFloor();
@@ -2247,7 +2298,7 @@ function handleVdDamage() {
 function showVdFx(text, color) {
   const layer = document.getElementById('vd-fx-layer');
   if (!layer) return;
-  
+
   const fx = document.createElement('div');
   fx.textContent = text;
   fx.style.position = 'absolute';
@@ -2259,21 +2310,21 @@ function showVdFx(text, color) {
   fx.style.fontWeight = '900';
   fx.style.textShadow = '0 4px 10px rgba(0,0,0,0.8)';
   fx.style.transition = 'all 1s cubic-bezier(0.16, 1, 0.3, 1)';
-  
+
   layer.appendChild(fx);
-  
+
   setTimeout(() => {
     fx.style.transform = 'translate(-50%, -100px) scale(1.5)';
     fx.style.opacity = '0';
   }, 50);
-  
+
   setTimeout(() => fx.remove(), 1000);
 }
 
 function endDungeon(isWin) {
   vdState.running = false;
   if (vdState.timerInterval) clearInterval(vdState.timerInterval);
-  
+
   const layer = document.getElementById('vd-fx-layer');
   if (layer) {
     layer.innerHTML = `
@@ -2288,7 +2339,7 @@ function endDungeon(isWin) {
         <button id="btn-vd-restart" class="btn btn-primary" style="font-size: 18px; padding: 12px 32px;">${isWin ? 'Chơi lại' : 'Thử sức lại'}</button>
       </div>
     `;
-    
+
     document.getElementById('btn-vd-restart').onclick = () => {
       layer.innerHTML = '';
       startDungeon();
@@ -2446,7 +2497,7 @@ async function loadGrammarVaultTab() {
   }).join('');
 }
 
-window.checkGvAnswer = function(idx, encodedAnswer) {
+window.checkGvAnswer = function (idx, encodedAnswer) {
   const correct = decodeURIComponent(encodedAnswer).toLowerCase().trim();
   const input = document.getElementById(`gv-input-${idx}`);
   const feedback = document.getElementById(`gv-feedback-${idx}`);
@@ -2464,7 +2515,7 @@ window.checkGvAnswer = function(idx, encodedAnswer) {
   }
 };
 
-window.removeGvItem = async function(idx) {
+window.removeGvItem = async function (idx) {
   const data = await chrome.storage.local.get(['tg_grammar_vault']);
   const vault = data.tg_grammar_vault || [];
   vault.splice(idx, 1);
@@ -2476,10 +2527,10 @@ async function addGrammarVaultDemo() {
   const data = await chrome.storage.local.get(['tg_grammar_vault']);
   const vault = data.tg_grammar_vault || [];
   const demos = [
-    { sentence: 'She ___ (already, watch) this movie.',   answer: 'has already watched', context: 'Demo - Present Perfect' },
-    { sentence: 'They ___ (not give) me the book yet.',    answer: 'have not given',       context: 'Demo - Present Perfect' },
-    { sentence: 'By the time she arrived, we ___ dinner.', answer: 'had finished',          context: 'Demo - Past Perfect' },
-    { sentence: 'He ___ to Paris three times since 2020.', answer: 'has been',              context: 'Demo - Present Perfect' }
+    { sentence: 'She ___ (already, watch) this movie.', answer: 'has already watched', context: 'Demo - Present Perfect' },
+    { sentence: 'They ___ (not give) me the book yet.', answer: 'have not given', context: 'Demo - Present Perfect' },
+    { sentence: 'By the time she arrived, we ___ dinner.', answer: 'had finished', context: 'Demo - Past Perfect' },
+    { sentence: 'He ___ to Paris three times since 2020.', answer: 'has been', context: 'Demo - Present Perfect' }
   ];
   for (const d of demos) {
     if (!vault.find(v => v.sentence === d.sentence)) {
@@ -2496,22 +2547,22 @@ async function loadSkillMatrixTab() {
   const vocabData = Object.values(vocabRes?.data || {});
 
   const totalAttempts = vocabData.reduce((a, e) => a + (e.totalAttempts || 0), 0);
-  const totalCorrect  = vocabData.reduce((a, e) => a + (e.correctAttempts || 0), 0);
+  const totalCorrect = vocabData.reduce((a, e) => a + (e.correctAttempts || 0), 0);
   const vocabAccuracy = totalAttempts > 0 ? Math.round(totalCorrect / totalAttempts * 100) : 0;
   setText('sm-vocab-accuracy', `${vocabAccuracy}%`);
 
   const errorData = await chrome.storage.local.get(['tg_error_buckets']);
   const buckets = errorData.tg_error_buckets || { form: 0, meaning: 0, spelling: 0, spacing: 0 };
   const totalErrors = (buckets.form + buckets.meaning + buckets.spelling + buckets.spacing) || 1;
-  const formPct    = Math.round(buckets.form    / totalErrors * 100);
+  const formPct = Math.round(buckets.form / totalErrors * 100);
   const meaningPct = Math.round(buckets.meaning / totalErrors * 100);
-  setText('sm-exam-form-err',    `${formPct}%`);
+  setText('sm-exam-form-err', `${formPct}%`);
   setText('sm-exam-meaning-err', `${meaningPct}%`);
 
   let topWeakness = 'Chưa đủ dữ liệu';
-  if (formPct > meaningPct && formPct > 20)      topWeakness = 'Chia dạng từ';
+  if (formPct > meaningPct && formPct > 20) topWeakness = 'Chia dạng từ';
   else if (meaningPct > formPct && meaningPct > 20) topWeakness = 'Hiểu ý nghĩa';
-  else if (vocabAccuracy < 70)                    topWeakness = 'Từ vựng cơ bản';
+  else if (vocabAccuracy < 70) topWeakness = 'Từ vựng cơ bản';
   setText('sm-top-weakness', topWeakness);
 
   // AI Conclusion
@@ -2525,7 +2576,7 @@ async function loadSkillMatrixTab() {
       else if (vocabAccuracy >= 60) lines.push(`⚠️ <strong>Từ vựng:</strong> Trung bình — ${vocabAccuracy}% đúng. Nên ôn lại qua tab "Lỗi nhập".`);
       else lines.push(`❌ <strong>Từ vựng:</strong> Cần cải thiện — chỉ đúng ${vocabAccuracy}%. Hãy dùng Vocab Dungeon để luyện.`);
 
-      if (formPct > 30)    lines.push(`🔴 <strong>Lỗi nổi bật:</strong> ${formPct}% lỗi do CHIA DẠNG TỪ. Bạn thường hiểu nghĩa nhưng điền sai dạng từ (ví dụ: dùng quy tắc cho động từ bất quy tắc).`);
+      if (formPct > 30) lines.push(`🔴 <strong>Lỗi nổi bật:</strong> ${formPct}% lỗi do CHIA DẠNG TỪ. Bạn thường hiểu nghĩa nhưng điền sai dạng từ (ví dụ: dùng quy tắc cho động từ bất quy tắc).`);
       if (meaningPct > 30) lines.push(`🟡 <strong>Lỗi nổi bật:</strong> ${meaningPct}% lỗi do SAI Ý NGHĨA — có thể nhầm từ hoặc không hiểu nội dung câu hỏi.`);
     }
     conclusionEl.innerHTML = lines.join('<br><br>') || 'Dữ liệu đang được phân tích...';
@@ -2565,14 +2616,14 @@ async function loadSkillMatrixTab() {
         const viEnc = encodeURIComponent(e.vietnamese || '');
         const enEnc = encodeURIComponent(e.english || '?');
         return `
-          <div style="background:rgba(30,41,59,0.6);border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:16px;border:1px solid rgba(148,163,184,0.1);">
-            <div style="font-size:24px;font-weight:800;color:#334155;width:28px;">${i + 1}</div>
+          <div style="background:var(--bg-card);border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:16px;border:1px solid var(--border-color);box-shadow:var(--shadow);">
+            <div style="font-size:24px;font-weight:800;color:var(--text-muted);width:28px;">${i + 1}</div>
             <div style="flex:1;">
-              <div style="font-weight:700;color:#f8fafc;font-size:15px;">${escapeHtml(e.vietnamese || '')} → <span style="color:#38bdf8">${escapeHtml(e.english || '?')}</span></div>
-              <div style="margin-top:6px;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;">
+              <div style="font-weight:700;color:var(--text-primary);font-size:15px;">${escapeHtml(e.vietnamese || '')} → <span style="color:var(--accent-blue)">${escapeHtml(e.english || '?')}</span></div>
+              <div style="margin-top:6px;height:6px;background:var(--border-color);border-radius:3px;overflow:hidden;">
                 <div style="height:100%;width:${wrongPct}%;background:${barColor};border-radius:3px;"></div>
               </div>
-              <div style="margin-top:4px;font-size:12px;color:#64748b;">${e.wrongAttempts} lần sai / ${e.totalAttempts} lần tổng (${wrongPct}% sai)</div>
+              <div style="margin-top:4px;font-size:12px;color:var(--text-secondary);">${e.wrongAttempts} lần sai / ${e.totalAttempts} lần tổng (${wrongPct}% sai)</div>
             </div>
             <button class="btn btn-secondary" style="font-size:12px;white-space:nowrap;" onclick="generateMnemonic('${viEnc}','${enEnc}',this)">💡 Mẹo</button>
           </div>`;

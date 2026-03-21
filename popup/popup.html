@@ -1,25 +1,29 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ThayGiap Tracker</title>
   <link rel="stylesheet" href="popup.css">
 </head>
+
 <body>
   <div class="popup-container">
     <!-- Header -->
     <header class="popup-header">
       <div class="logo-row">
-        <span class="logo-icon">📚</span>
         <div>
           <h1 class="logo-title">ThayGiap Tracker</h1>
-          <span class="logo-subtitle">v1.3.0 · Learning Progress</span>
+          <span class="logo-subtitle">v1.3.0</span>
         </div>
       </div>
       <div class="header-actions">
+        <button id="btn-theme-toggle" class="btn-icon" title="Chuyển theme">
+          <span id="theme-icon">🌙</span>
+        </button>
         <button id="btn-toggle-tracking" class="btn-icon" title="Bật/Tắt tracking">
-          <span id="tracking-icon">🟢</span>
+          <span id="tracking-icon">●</span>
         </button>
       </div>
     </header>
@@ -27,7 +31,6 @@
     <!-- Today Stats Card -->
     <div class="stats-card primary">
       <div class="stats-card-header">
-        <span class="stats-emoji">📊</span>
         <span class="stats-label">Hôm nay</span>
         <span id="today-date" class="stats-date"></span>
       </div>
@@ -60,7 +63,6 @@
     <!-- Words Summary -->
     <div class="stats-card secondary">
       <div class="stats-card-header">
-        <span class="stats-emoji">📝</span>
         <span class="stats-label">Từ vựng</span>
         <span id="words-count" class="stats-badge">0</span>
       </div>
@@ -91,7 +93,6 @@
     <!-- Top Wrong Words -->
     <div class="stats-card">
       <div class="stats-card-header">
-        <span class="stats-emoji">⚠️</span>
         <span class="stats-label">Sai nhiều nhất</span>
       </div>
       <div id="top-wrong-words" class="word-list">
@@ -102,7 +103,6 @@
     <!-- Recent Sessions -->
     <div class="stats-card">
       <div class="stats-card-header">
-        <span class="stats-emoji">🕐</span>
         <span class="stats-label">Gần đây</span>
       </div>
       <div id="recent-sessions" class="session-list">
@@ -113,7 +113,6 @@
     <!-- Verb Lookup -->
     <div class="stats-card">
       <div class="stats-card-header">
-        <span class="stats-emoji">🔍</span>
         <span class="stats-label">Tra cứu Động từ</span>
       </div>
       <div class="verb-lookup-container">
@@ -125,7 +124,6 @@
     <!-- Quick Actions -->
     <div class="stats-card">
       <div class="stats-card-header">
-        <span class="stats-emoji">⚡</span>
         <span class="stats-label">Thao tác nhanh</span>
       </div>
       <div class="quick-actions">
@@ -138,15 +136,12 @@
 
     <!-- Footer Actions -->
     <footer class="popup-footer">
-      <button id="btn-options" class="btn-secondary">
-        <span>⚙️</span> Chi tiết
-      </button>
-      <button id="btn-export" class="btn-secondary">
-        <span>📤</span> Export
-      </button>
+      <button id="btn-options" class="btn-secondary">Chi tiết</button>
+      <button id="btn-export" class="btn-secondary">Export</button>
     </footer>
   </div>
 
   <script src="popup.js"></script>
 </body>
+
 </html>

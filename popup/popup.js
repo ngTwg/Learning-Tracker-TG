@@ -5,6 +5,9 @@
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Load theme
+  await loadTheme();
+
   // Set today's date
   const dateEl = document.getElementById('today-date');
   if (dateEl) {
@@ -182,7 +185,12 @@ async function loadSettingsState() {
 function renderSettingsUI() {
   const icon = document.getElementById('tracking-icon');
   if (icon) {
-    icon.textContent = popupSettings.trackingEnabled ? '🟢' : '🔴';
+    icon.textContent = '●';
+    if (popupSettings.trackingEnabled) {
+      icon.classList.remove('inactive');
+    } else {
+      icon.classList.add('inactive');
+    }
   }
 
   const notifyBtn = document.getElementById('btn-toggle-notification');
@@ -191,8 +199,51 @@ function renderSettingsUI() {
   }
 }
 
+// Theme management
+async function loadTheme() {
+  try {
+    const result = await chrome.storage.local.get(['theme']);
+    const theme = result.theme || 'dark';
+    applyTheme(theme);
+  } catch (err) {
+    console.error('Error loading theme:', err);
+  }
+}
+
+function applyTheme(theme) {
+  const body = document.body;
+  const themeIcon = document.getElementById('theme-icon');
+
+  if (theme === 'light') {
+    body.classList.add('light-theme');
+    if (themeIcon) themeIcon.textContent = '☀️';
+  } else {
+    body.classList.remove('light-theme');
+    if (themeIcon) themeIcon.textContent = '🌙';
+  }
+}
+
+async function toggleTheme() {
+  try {
+    const result = await chrome.storage.local.get(['theme']);
+    const currentTheme = result.theme || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+    await chrome.storage.local.set({ theme: newTheme });
+    applyTheme(newTheme);
+  } catch (err) {
+    console.error('Error toggling theme:', err);
+  }
+}
+
 // ============ Button Handlers ============
 function setupButtons() {
+  // Theme toggle
+  const btnTheme = document.getElementById('btn-theme-toggle');
+  if (btnTheme) {
+    btnTheme.addEventListener('click', toggleTheme);
+  }
+
   // Options page
   const btnOptions = document.getElementById('btn-options');
   if (btnOptions) {
@@ -334,7 +385,7 @@ function getRelativeTime(timestamp) {
   if (minutes < 60) return `${minutes} phút trước`;
   if (hours < 24) return `${hours} giờ trước`;
   if (days < 7) return `${days} ngày trước`;
-  
+
   const d = new Date(timestamp);
   return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 }
@@ -478,9 +529,9 @@ function setupVerbLookup() {
     }
 
     resultEl.className = `verb-result has-result ${lookup.irregular ? '' : 'is-regular'}`;
-    
-    const sourceLabel = lookup.irregular 
-      ? 'Bất quy tắc' 
+
+    const sourceLabel = lookup.irregular
+      ? 'Bất quy tắc'
       : 'Động từ có quy tắc (thêm ed)';
 
     resultEl.innerHTML = `

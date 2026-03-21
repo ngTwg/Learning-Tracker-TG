@@ -2,6 +2,8 @@
 
 > Extension toàn diện hỗ trợ học tập, theo dõi tiến độ, phân tích dữ liệu và "game hóa" quá trình học trên hệ thống **Thầy Giáp ENGLISH** (thaygiap.com).
 
+**Author:** Lê Ngọc Tường _HCMUS_DTV
+
 Không chỉ là một tracker thông thường, ThayGiap Learning Ecosystem đem đến một **hệ sinh thái học tập chủ động**, tích hợp Gamification, Micro-learning, phân tích điểm yếu bằng dữ liệu (Skill Matrix) và các công cụ chống xao nhãng hiệu quả.
 
 ---

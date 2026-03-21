@@ -1,20 +1,23 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ThayGiap New Tab</title>
   <link rel="stylesheet" href="newtab.css">
 </head>
+
 <body>
   <div class="bg-layer" id="bg-layer"></div>
-  
+
   <div class="top-nav">
     <div class="nav-left">
-      <span class="logo">📚 ThayGiap</span>
+      <span class="logo">ThayGiap</span>
     </div>
     <div class="nav-right">
-      <button id="btn-options" class="nav-btn" title="Cài đặt extension">⚙️ Dashboard</button>
+      <button id="btn-theme" class="nav-btn" title="Chuyển theme">🌙</button>
+      <button id="btn-options" class="nav-btn" title="Cài đặt extension">Dashboard</button>
     </div>
   </div>
 
@@ -26,7 +29,7 @@
       <div id="card-loading" class="card-state">
         <div class="spinner"></div>
       </div>
-      
+
       <div id="card-empty" class="card-state" style="display: none;">
         <span class="empty-icon">🎉</span>
         <h3>Không còn từ vựng nào cần ôn tập!</h3>
@@ -37,14 +40,14 @@
         <div class="card-badge">Daily Micro-learning</div>
         <div class="word-vietnamese" id="word-vietnamese">...</div>
         <p class="word-hint">Gõ từ tiếng Anh tương ứng</p>
-        
+
         <input type="text" id="word-input" class="word-input" placeholder="Type here..." autocomplete="off">
-        
+
         <div class="card-actions">
           <button id="btn-skip" class="btn btn-secondary">Bỏ qua (Tiếp tục lướt web)</button>
           <button id="btn-submit" class="btn btn-primary">Kiểm tra</button>
         </div>
-        
+
         <div id="feedback-msg" class="feedback-msg"></div>
       </div>
     </div>
@@ -56,4 +59,5 @@
 
   <script src="newtab.js"></script>
 </body>
+
 </html>
