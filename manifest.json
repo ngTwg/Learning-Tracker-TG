@@ -50,8 +50,7 @@
       ],
       "exclude_matches": [
         "*://*.google.com/*",
-        "*://chrome.google.com/*",
-        "*://chrome://*/*"
+        "*://chrome.google.com/*"
       ],
       "js": ["utils/storage.js", "social_blocker.js"],
       "css": ["social_blocker.css"],

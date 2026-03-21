@@ -476,14 +476,14 @@ function renderWrongInputs() {
 
     const viEncoded = encodeURIComponent(entry.vietnamese || '');
     const inReviewBtn = isInReview
-      ? `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="removeFromReview(decodeURIComponent('${viEncoded}'))">✓ Đang ôn tập</button>`
-      : `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" onclick="addToReview(decodeURIComponent('${viEncoded}'))">+ Thêm vào ôn tập</button>`;
+      ? `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" data-act="removeFromReview" data-vi="${viEncoded}">✓ Đang ôn tập</button>`
+      : `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" data-act="addToReview" data-vi="${viEncoded}">+ Thêm vào ôn tập</button>`;
 
     const reviewBadge = isInReview ? `<span class="wi-review-badge">🔁</span>` : '';
 
     return `
       <div class="wi-card" id="wi-card-${btoa(encodeURIComponent(entry.vietnamese || '')).slice(0, 10)}">
-        <div class="wi-card-header" onclick="this.parentElement.classList.toggle('expanded')">
+        <div class="wi-card-header" data-act="toggleExpanded">
           <div class="wi-card-left">
             <div class="wi-card-info">
               <div class="wi-word-row">
@@ -504,7 +504,7 @@ function renderWrongInputs() {
           <div class="wi-attempts-title">Lịch sử từng lần gõ sai (${history.length} lần)</div>
           <div class="wi-card-actions">
             ${inReviewBtn}
-            <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px; margin-left:8px;" onclick="generateMnemonic('${viEncoded}', '${encodeURIComponent(entry.english || '?')}', this)">💡 Tạo Mẹo Nhớ</button>
+            <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px; margin-left:8px;" data-act="genMnemonic" data-vi="${viEncoded}" data-en="${encodeURIComponent(entry.english || '?')}">💡 Tạo Mẹo Nhớ</button>
             <div class="mnemonic-result" style="display:none; margin-top:10px; padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; font-style:italic; font-size:13px; width:100%; text-align:left;"></div>
           </div>
         </div>
@@ -2595,11 +2595,11 @@ async function loadGrammarVaultTab() {
         <div style="padding:20px;">
           <div style="font-size:12px;color:#475569;margin-bottom:10px;display:flex;justify-content:space-between;">
             <span>📚 ${escapeHtml(item.context || 'Exam')}</span>
-            <span style="color:#334155;cursor:pointer;" onclick="removeGvItem(${idx})">✕</span>
+            <span style="color:#334155;cursor:pointer;" data-act="rmGvItem" data-idx="${idx}">✕</span>
           </div>
           <div style="font-size:18px;line-height:2.5;font-family:Georgia,serif;">${sentenceHtml}</div>
           <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
-            <button class="btn btn-primary" style="font-size:13px;" onclick="checkGvAnswer(${idx},'${encodeURIComponent(item.answer || '')}')">✓ Kiểm tra</button>
+            <button class="btn btn-primary" style="font-size:13px;" data-act="chkGvAnswer" data-idx="${idx}" data-ans="${encodeURIComponent(item.answer || '')}">✓ Kiểm tra</button>
             <span id="gv-feedback-${idx}" style="font-size:13px;"></span>
           </div>
           <div style="margin-top:8px;font-size:12px;color:#334155;">Gợi ý: ${Array.from(item.answer || '').map((c, i) => i === 0 ? c : (c === ' ' ? ' ' : '_')).join('')}</div>
@@ -2736,7 +2736,7 @@ async function loadSkillMatrixTab() {
               </div>
               <div style="margin-top:4px;font-size:12px;color:var(--text-secondary);">${e.wrongAttempts} lần sai / ${e.totalAttempts} lần tổng (${wrongPct}% sai)</div>
             </div>
-            <button class="btn btn-secondary" style="font-size:12px;white-space:nowrap;" onclick="generateMnemonic('${viEnc}','${enEnc}',this)">💡 Mẹo</button>
+            <button class="btn btn-secondary" style="font-size:12px;white-space:nowrap;" data-act="genMnemonic" data-vi="${viEnc}" data-en="${enEnc}">💡 Mẹo</button>
           </div>`;
       }).join('');
     }
@@ -2772,3 +2772,48 @@ function renderTollDomainsList() {
     });
   });
 }
+
+// Global delegated event listeners to bypass inline onclick CSP issues
+document.addEventListener('click', (e) => {
+  const target = e.target.closest('[data-act]');
+  if (!target) return;
+
+  const act = target.dataset.act;
+  switch (act) {
+    case 'toggleExpanded':
+      target.parentElement.classList.toggle('expanded');
+      break;
+    case 'removeFromReview':
+      if (typeof window.removeFromReview === 'function') {
+        window.removeFromReview(decodeURIComponent(target.dataset.vi));
+      }
+      break;
+    case 'addToReview':
+      if (typeof window.addToReview === 'function') {
+        window.addToReview(decodeURIComponent(target.dataset.vi));
+      }
+      break;
+    case 'genMnemonic':
+      if (typeof window.generateMnemonic === 'function') {
+        window.generateMnemonic(
+          decodeURIComponent(target.dataset.vi),
+          decodeURIComponent(target.dataset.en),
+          target
+        );
+      }
+      break;
+    case 'rmGvItem':
+      if (typeof window.removeGvItem === 'function') {
+        window.removeGvItem(parseInt(target.dataset.idx, 10));
+      }
+      break;
+    case 'chkGvAnswer':
+      if (typeof window.checkGvAnswer === 'function') {
+        window.checkGvAnswer(
+          parseInt(target.dataset.idx, 10),
+          decodeURIComponent(target.dataset.ans)
+        );
+      }
+      break;
+  }
+});

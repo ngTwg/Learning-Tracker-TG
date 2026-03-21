@@ -688,8 +688,12 @@
     }
 
     const now = Date.now();
-    if (source !== 'manual' && (now - state.lastFullscreenRequestAt) < 1200) {
-      return false;
+    if (source !== 'manual') {
+      if ((now - state.lastFullscreenRequestAt) < 1200) return false;
+      // Tránh lỗi "API can only be initiated by a user gesture"
+      if (navigator.userActivation && !navigator.userActivation.isActive) {
+        return false;
+      }
     }
     state.lastFullscreenRequestAt = now;
 
