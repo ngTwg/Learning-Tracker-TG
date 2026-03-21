@@ -19,6 +19,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // ── Extension Master Power Toggle ──────────────────────────────────────────
+  const btnPower = document.getElementById('btn-toggle-extension');
+  const powerIcon = document.getElementById('extension-power-icon');
+  const banner = document.getElementById('ext-disabled-banner');
+
+  async function refreshPowerState() {
+    const res = await chrome.storage.local.get('extensionEnabled');
+    const enabled = res.extensionEnabled !== false; // default ON
+    if (btnPower) {
+      btnPower.classList.toggle('power-on', enabled);
+      btnPower.classList.toggle('power-off', !enabled);
+    }
+    if (powerIcon) powerIcon.textContent = enabled ? '⏻' : '⏼';
+    if (banner) banner.style.display = enabled ? 'none' : 'block';
+  }
+
+  if (btnPower) {
+    btnPower.addEventListener('click', async () => {
+      const res = await chrome.storage.local.get('extensionEnabled');
+      const current = res.extensionEnabled !== false;
+      await chrome.storage.local.set({ extensionEnabled: !current });
+      await refreshPowerState();
+    });
+  }
+
+  await refreshPowerState();
+
   // Setup verb lookup input listener
   setupVerbLookup();
 

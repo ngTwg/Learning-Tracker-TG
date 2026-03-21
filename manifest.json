@@ -15,11 +15,7 @@
   "host_permissions": [
     "https://thaygiap.com/*",
     "http://thaygiap.com/*",
-    "*://*.facebook.com/*",
-    "*://*.youtube.com/*",
-    "*://*.tiktok.com/*",
-    "*://*.instagram.com/*",
-    "*://*.reddit.com/*",
+    "<all_urls>",
     "*://*.vnexpress.net/*",
     "*://*.zing.vn/*",
     "*://*.tuoitre.vn/*",
@@ -50,11 +46,12 @@
     },
     {
       "matches": [
-        "*://*.facebook.com/*",
-        "*://*.youtube.com/*",
-        "*://*.tiktok.com/*",
-        "*://*.instagram.com/*",
-        "*://*.reddit.com/*"
+        "<all_urls>"
+      ],
+      "exclude_matches": [
+        "*://*.google.com/*",
+        "*://chrome.google.com/*",
+        "*://chrome://*/*"
       ],
       "js": ["utils/storage.js", "social_blocker.js"],
       "css": ["social_blocker.css"],

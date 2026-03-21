@@ -1788,6 +1788,36 @@ async function loadSettingsTab() {
 
     statsEl.textContent = `📊 ${eventsCount} events | 📝 ${vocabCount} từ vựng | 📅 ${sessionCount} phiên học`;
   }
+
+  // ── Load Toll-booth Settings ─────────────────────────────────────────────────
+  try {
+    const tollRes = await new Promise(r => chrome.storage.local.get('tollboothSettings', r));
+    const ts = tollRes.tollboothSettings || {};
+    let domains = ts.customDomains;
+    if (!domains) {
+      // Migrate from old platforms config if it exists
+      const oldPlatforms = ts.platforms || { facebook: true, youtube: true };
+      domains = Object.keys(oldPlatforms).filter(p => oldPlatforms[p]).map(p => p + '.com');
+    }
+    
+    window.currentTollDomains = domains;
+    renderTollDomainsList();
+
+    // Word count buttons
+    const wordCount = ts.wordCount || 5;
+    document.querySelectorAll('#toll-words-count-group .rv-opt-btn').forEach(btn => {
+      btn.classList.toggle('active', Number(btn.dataset.val) === wordCount);
+    });
+
+    // Interval buttons
+    const intervalMin = ts.intervalMin || 15;
+    document.querySelectorAll('#toll-interval-group .rv-opt-btn').forEach(btn => {
+      btn.classList.toggle('active', Number(btn.dataset.val) === intervalMin);
+    });
+
+    const skipCb = document.getElementById('toll-allow-skip');
+    if (skipCb) skipCb.checked = ts.allowSkip !== false;
+  } catch (_) {}
 }
 
 function setupSettingsActions() {
@@ -1972,6 +2002,87 @@ function setupSettingsActions() {
           alert('✅ Đã xóa toàn bộ dữ liệu.');
           location.reload();
         }
+      }
+    });
+  }
+
+  // ── Toll-booth option btn groups ─────────────────────────────────────────────
+  document.querySelectorAll('#toll-words-count-group .rv-opt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#toll-words-count-group .rv-opt-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  document.querySelectorAll('#toll-interval-group .rv-opt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#toll-interval-group .rv-opt-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // ── Save Toll-booth Settings ──────────────────────────────────────────────────
+  const btnSaveToll = document.getElementById('btn-save-toll-settings');
+  const tollSaveMsg = document.getElementById('toll-save-msg');
+
+  // Input events
+  const domainInput = document.getElementById('toll-custom-domain-input');
+  const btnAddDomain = document.getElementById('btn-toll-add-domain');
+
+  if (btnAddDomain && domainInput) {
+    const addFn = () => {
+      let val = domainInput.value.trim().toLowerCase();
+      if (!val) return;
+      // remove protocol if present
+      val = val.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+
+      if (val && !window.currentTollDomains.includes(val)) {
+        window.currentTollDomains.push(val);
+        renderTollDomainsList();
+      }
+      domainInput.value = '';
+    };
+    btnAddDomain.addEventListener('click', addFn);
+    domainInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addFn();
+      }
+    });
+  }
+
+  if (btnSaveToll) {
+    btnSaveToll.addEventListener('click', async () => {
+      const customDomains = window.currentTollDomains || [];
+
+      const activeWordBtn = document.querySelector('#toll-words-count-group .rv-opt-btn.active');
+      const wordCount = activeWordBtn ? Number(activeWordBtn.dataset.val) : 5;
+
+      const activeIntervalBtn = document.querySelector('#toll-interval-group .rv-opt-btn.active');
+      const intervalMin = activeIntervalBtn ? Number(activeIntervalBtn.dataset.val) : 15;
+
+      const skipCb = document.getElementById('toll-allow-skip');
+      const allowSkip = skipCb ? skipCb.checked : true;
+
+      await chrome.storage.local.set({
+        tollboothSettings: { customDomains, wordCount, intervalMin, allowSkip }
+      });
+
+      if (tollSaveMsg) {
+        tollSaveMsg.style.display = 'block';
+        setTimeout(() => { if (tollSaveMsg) tollSaveMsg.style.display = 'none'; }, 2500);
+      }
+    });
+  }
+
+  // ── Test Toll-booth ───────────────────────────────────────────────────────────
+  const btnTestToll = document.getElementById('btn-test-toll');
+  if (btnTestToll) {
+    btnTestToll.addEventListener('click', async () => {
+      // Clear unlock keys in localStorage of all tabs (can't directly, open a test page)
+      const tabs = await new Promise(r => chrome.tabs.query({ active: true, currentWindow: true }, r));
+      if (tabs[0]) {
+        chrome.tabs.create({ url: 'https://www.facebook.com/', active: true });
       }
     });
   }
@@ -2630,4 +2741,34 @@ async function loadSkillMatrixTab() {
       }).join('');
     }
   }
+}
+
+// ============ Toll-booth Ext ============
+function renderTollDomainsList() {
+  const container = document.getElementById('toll-custom-domain-list');
+  if (!container) return;
+
+  const domains = window.currentTollDomains || [];
+  if (domains.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-secondary); font-size:13px; font-style:italic;">Chưa có trang web nào được thêm.</div>';
+    return;
+  }
+
+  container.innerHTML = domains.map(d => `
+    <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); border:1px solid var(--border-color); padding:10px 14px; border-radius:var(--radius-md);">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:16px;">🌐</span>
+        <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${escapeHtml(d)}</span>
+      </div>
+      <button class="btn-remove-domain" data-domain="${escapeHtml(d)}" style="background:transparent; border:none; color:var(--accent-danger); cursor:pointer; font-size:18px; line-height:1; display:flex; align-items:center; justify-content:center; padding:4px; border-radius:4px; transition:background 0.2s;">×</button>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.btn-remove-domain').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const d = btn.dataset.domain;
+      window.currentTollDomains = window.currentTollDomains.filter(item => item !== d);
+      renderTollDomainsList();
+    });
+  });
 }

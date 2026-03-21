@@ -626,6 +626,59 @@
           </label>
         </div>
 
+        <!-- Toll-booth Settings -->
+        <div class="settings-section">
+          <h3>🚧 Vé Cầu Đường (Toll-booth Settings)</h3>
+          <p style="font-size:12px; color:var(--text-secondary); margin-bottom:14px;">Sau X phút dùng mạng xã hội, extension sẽ hiện bài kiểm tra từ vựng nhỏ. Trả lời đúng mới được lướt tiếp!</p>
+
+          <div class="rv-setting-group" style="margin-bottom:14px;">
+            <label class="rv-setting-label">🌐 Các trang web áp dụng Toll-booth</label>
+            <div style="display:flex; gap:10px; margin-top:8px;">
+              <input type="text" id="toll-custom-domain-input" placeholder="VD: facebook.com, youtube.com" style="flex:1; padding:10px 14px; border:1px solid var(--border-color); border-radius:var(--radius-md); background:var(--bg-card); color:var(--text-primary); font-size:14px; outline:none; transition:var(--transition-smooth);">
+              <button id="btn-toll-add-domain" style="padding:10px 20px; background:var(--gradient-primary); color:white; border:none; border-radius:var(--radius-md); cursor:pointer; font-weight:600; font-size:14px; transition:var(--transition-smooth);">Thêm</button>
+            </div>
+            <div id="toll-custom-domain-list" style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <div class="rv-setting-group" style="margin-bottom:14px;">
+            <label class="rv-setting-label">📦 Số từ kiểm tra mỗi lần</label>
+            <div class="rv-btn-group" id="toll-words-count-group">
+              <button class="rv-opt-btn" data-val="3">3 từ</button>
+              <button class="rv-opt-btn active" data-val="5">5 từ</button>
+              <button class="rv-opt-btn" data-val="7">7 từ</button>
+              <button class="rv-opt-btn" data-val="10">10 từ</button>
+            </div>
+          </div>
+
+          <div class="rv-setting-group" style="margin-bottom:14px;">
+            <label class="rv-setting-label">⏱️ Thời gian xem tự do trước khi bắt kiểm tra</label>
+            <div class="rv-btn-group" id="toll-interval-group">
+              <button class="rv-opt-btn" data-val="5">5 phút</button>
+              <button class="rv-opt-btn" data-val="10">10 phút</button>
+              <button class="rv-opt-btn active" data-val="15">15 phút</button>
+              <button class="rv-opt-btn" data-val="20">20 phút</button>
+              <button class="rv-opt-btn" data-val="30">30 phút</button>
+            </div>
+          </div>
+
+          <label class="setting-item">
+            <span class="setting-label">
+              Cho phép Bỏ qua kiểm tra
+              <small style="display:block;color:var(--text-muted);font-weight:400;">Hiện nút "Bỏ qua" trên màn hình vé cầu đường</small>
+            </span>
+            <input type="checkbox" id="toll-allow-skip" checked>
+          </label>
+
+          <div class="settings-actions" style="margin-top:14px;">
+            <button id="btn-save-toll-settings" class="btn btn-primary">💾 Lưu cài đặt Toll-booth</button>
+            <button id="btn-test-toll" class="btn btn-secondary">🧪 Thử ngay</button>
+          </div>
+
+          <div id="toll-save-msg" style="color:var(--accent-green); font-size:13px; margin-top:8px; display:none;">✅ Đã lưu!</div>
+        </div>
+
         <div class="settings-section">
           <h3>🌐 Tính năng học tập nâng cao</h3>
           <label class="setting-item">
@@ -698,9 +751,15 @@
         <div class="settings-section">
           <h3>Về extension</h3>
           <div class="about-info">
-            <p><strong>ThayGiap Learning Tracker</strong> v1.2.0</p>
+            <p><strong>ThayGiap Learning Tracker</strong> v1.3.0</p>
             <p>Theo dõi quá trình học trên hệ thống Thầy Giáp ENGLISH.</p>
             <p>Dữ liệu được lưu cục bộ trong trình duyệt (chrome.storage.local).</p>
+            <hr style="border:none; border-top:1px solid var(--border-color); margin: 12px 0;">
+            <p><strong>Liên hệ & Hỗ trợ (Contact)</strong></p>
+            <p>Telegram: @AstroMindquiz</p>
+            <p>Gmail: lengoctuong2005@gmail.com</p>
+            <p>Facebook: <a href="https://www.facebook.com/ngtu.ong14.11" target="_blank" style="color:var(--accent-blue); text-decoration:none;">Lê Ngọc Tường</a></p>
+            <p style="margin-top:8px; font-weight:600;">©Lê Ngọc tường_HCMUS_23DTV</p>
           </div>
         </div>
       </section>
