@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // Setup verb lookup input listener
+  setupVerbLookup();
+
   // Load all data
   await loadTodayStats();
   await loadVocabSummary();
@@ -348,3 +351,144 @@ function formatDateLocal(dateLike) {
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
+
+// ============ Irregular Verbs Logic ============
+const IRREGULAR_VERBS = [
+  { base: 'be', past: 'was/were', participle: 'been' },
+  { base: 'become', past: 'became', participle: 'become' },
+  { base: 'begin', past: 'began', participle: 'begun' },
+  { base: 'break', past: 'broke', participle: 'broken' },
+  { base: 'bring', past: 'brought', participle: 'brought' },
+  { base: 'build', past: 'built', participle: 'built' },
+  { base: 'buy', past: 'bought', participle: 'bought' },
+  { base: 'catch', past: 'caught', participle: 'caught' },
+  { base: 'choose', past: 'chose', participle: 'chosen' },
+  { base: 'come', past: 'came', participle: 'come' },
+  { base: 'cost', past: 'cost', participle: 'cost' },
+  { base: 'cut', past: 'cut', participle: 'cut' },
+  { base: 'do', past: 'did', participle: 'done' },
+  { base: 'draw', past: 'drew', participle: 'drawn' },
+  { base: 'drink', past: 'drank', participle: 'drunk' },
+  { base: 'drive', past: 'drove', participle: 'driven' },
+  { base: 'eat', past: 'ate', participle: 'eaten' },
+  { base: 'fall', past: 'fell', participle: 'fallen' },
+  { base: 'feel', past: 'felt', participle: 'felt' },
+  { base: 'fight', past: 'fought', participle: 'fought' },
+  { base: 'find', past: 'found', participle: 'found' },
+  { base: 'fly', past: 'flew', participle: 'flown' },
+  { base: 'forget', past: 'forgot', participle: 'forgotten' },
+  { base: 'forgive', past: 'forgave', participle: 'forgiven' },
+  { base: 'get', past: 'got', participle: 'got/gotten' },
+  { base: 'give', past: 'gave', participle: 'given' },
+  { base: 'go', past: 'went', participle: 'gone' },
+  { base: 'grow', past: 'grew', participle: 'grown' },
+  { base: 'have', past: 'had', participle: 'had' },
+  { base: 'hear', past: 'heard', participle: 'heard' },
+  { base: 'hide', past: 'hid', participle: 'hidden' },
+  { base: 'hold', past: 'held', participle: 'held' },
+  { base: 'keep', past: 'kept', participle: 'kept' },
+  { base: 'know', past: 'knew', participle: 'known' },
+  { base: 'lead', past: 'led', participle: 'led' },
+  { base: 'leave', past: 'left', participle: 'left' },
+  { base: 'lose', past: 'lost', participle: 'lost' },
+  { base: 'make', past: 'made', participle: 'made' },
+  { base: 'meet', past: 'met', participle: 'met' },
+  { base: 'pay', past: 'paid', participle: 'paid' },
+  { base: 'put', past: 'put', participle: 'put' },
+  { base: 'read', past: 'read', participle: 'read' },
+  { base: 'ride', past: 'rode', participle: 'ridden' },
+  { base: 'ring', past: 'rang', participle: 'rung' },
+  { base: 'rise', past: 'rose', participle: 'risen' },
+  { base: 'run', past: 'ran', participle: 'run' },
+  { base: 'say', past: 'said', participle: 'said' },
+  { base: 'see', past: 'saw', participle: 'seen' },
+  { base: 'sell', past: 'sold', participle: 'sold' },
+  { base: 'send', past: 'sent', participle: 'sent' },
+  { base: 'show', past: 'showed', participle: 'shown' },
+  { base: 'sing', past: 'sang', participle: 'sung' },
+  { base: 'sit', past: 'sat', participle: 'sat' },
+  { base: 'sleep', past: 'slept', participle: 'slept' },
+  { base: 'speak', past: 'spoke', participle: 'spoken' },
+  { base: 'spend', past: 'spent', participle: 'spent' },
+  { base: 'stand', past: 'stood', participle: 'stood' },
+  { base: 'swim', past: 'swam', participle: 'swum' },
+  { base: 'take', past: 'took', participle: 'taken' },
+  { base: 'teach', past: 'taught', participle: 'taught' },
+  { base: 'tell', past: 'told', participle: 'told' },
+  { base: 'think', past: 'thought', participle: 'thought' },
+  { base: 'understand', past: 'understood', participle: 'understood' },
+  { base: 'wear', past: 'wore', participle: 'worn' },
+  { base: 'win', past: 'won', participle: 'won' },
+  { base: 'write', past: 'wrote', participle: 'written' }
+];
+
+const irregularVerbIndex = new Map();
+IRREGULAR_VERBS.forEach((entry) => {
+  [entry.base, entry.past, entry.participle]
+    .join('/')
+    .split(/[\/,]/)
+    .map(part => part.trim().toLowerCase())
+    .filter(Boolean)
+    .forEach((form) => {
+      irregularVerbIndex.set(form, entry);
+    });
+});
+
+function toRegularPast(base) {
+  const verb = String(base || '').toLowerCase().trim();
+  if (!verb) return '';
+  if (/[^aeiou]y$/.test(verb)) return `${verb.slice(0, -1)}ied`;
+  if (/e$/.test(verb)) return `${verb}d`;
+  return `${verb}ed`;
+}
+
+function lookupIrregularVerb(term) {
+  const normalized = String(term || '').toLowerCase().trim().replace(/[^a-z/-]/g, '');
+  if (!normalized) return null;
+  const entry = irregularVerbIndex.get(normalized);
+  if (entry) {
+    return { ...entry, irregular: true };
+  }
+  return {
+    base: normalized,
+    past: toRegularPast(normalized),
+    participle: toRegularPast(normalized),
+    irregular: false
+  };
+}
+
+function setupVerbLookup() {
+  const inputEl = document.getElementById('verb-search-input');
+  const resultEl = document.getElementById('verb-search-result');
+  if (!inputEl || !resultEl) return;
+
+  inputEl.addEventListener('input', (e) => {
+    const term = e.target.value.trim();
+    if (!term) {
+      resultEl.innerHTML = 'Nhập động từ để xem V2, V3.';
+      resultEl.className = 'verb-result';
+      return;
+    }
+
+    const lookup = lookupIrregularVerb(term);
+    if (!lookup) {
+      resultEl.innerHTML = 'Vui lòng nhập một từ tiếng Anh hợp lệ.';
+      resultEl.className = 'verb-result';
+      return;
+    }
+
+    resultEl.className = `verb-result has-result ${lookup.irregular ? '' : 'is-regular'}`;
+    
+    const sourceLabel = lookup.irregular 
+      ? 'Bất quy tắc' 
+      : 'Động từ có quy tắc (thêm ed)';
+
+    resultEl.innerHTML = `
+      <div style="margin-bottom: 4px;"><strong>V1:</strong> ${escapeHtml(lookup.base)}</div>
+      <div style="margin-bottom: 4px;"><strong>V2:</strong> ${escapeHtml(lookup.past)}</div>
+      <div style="margin-bottom: 4px;"><strong>V3:</strong> ${escapeHtml(lookup.participle)}</div>
+      <div style="color: var(--text-muted); font-size: 11px; margin-top: 6px;">💡 ${escapeHtml(sourceLabel)}</div>
+    `;
+  });
+}
+

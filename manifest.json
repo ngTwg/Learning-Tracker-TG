@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ThayGiap Learning Tracker",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "description": "Theo dõi quá trình học và làm bài trên hệ thống Thầy Giáp ENGLISH. Ghi nhận từ vựng đúng/sai, số lần sai, điểm kiểm tra, lịch sử luyện tập.",
   "permissions": [
     "storage",
@@ -13,7 +13,18 @@
   ],
   "host_permissions": [
     "https://thaygiap.com/*",
-    "http://thaygiap.com/*"
+    "http://thaygiap.com/*",
+    "*://*.facebook.com/*",
+    "*://*.youtube.com/*",
+    "*://*.tiktok.com/*",
+    "*://*.instagram.com/*",
+    "*://*.reddit.com/*",
+    "*://*.vnexpress.net/*",
+    "*://*.zing.vn/*",
+    "*://*.tuoitre.vn/*",
+    "*://*.dantri.com.vn/*",
+    "*://*.bbc.com/*",
+    "*://*.cnn.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -32,7 +43,30 @@
         "https://thaygiap.com/*",
         "http://thaygiap.com/*"
       ],
-      "js": ["utils/site-adapters.js", "content.js"],
+      "js": ["utils/storage.js", "utils/site-adapters.js", "content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.facebook.com/*",
+        "*://*.youtube.com/*",
+        "*://*.tiktok.com/*",
+        "*://*.instagram.com/*",
+        "*://*.reddit.com/*"
+      ],
+      "js": ["utils/storage.js", "social_blocker.js"],
+      "css": ["social_blocker.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://*.vnexpress.net/*",
+        "*://*.zing.vn/*",
+        "*://*.tuoitre.vn/*",
+        "*://*.dantri.com.vn/*"
+      ],
+      "js": ["utils/storage.js", "tanglish.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }
@@ -42,5 +76,8 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab/newtab.html"
   }
 }

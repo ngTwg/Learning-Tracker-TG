@@ -69,7 +69,12 @@
     badgeElement: null,
     lastFocusedInputId: '',
     examDraftAnswers: new Map(),
-    verbLookupOpen: false
+    verbLookupOpen: false,
+    pomodoroTimerId: null,
+    pomodoroTimeLeft: 25 * 60,
+    pomodoroIsBreak: false,
+    pomodoroIsRunning: false,
+    lastErrorContext: null
   };
 
   // ============ Logging ============
@@ -1026,6 +1031,97 @@
     updateBadge();
   }
 
+  // ── Signal Word Highlighter ────────────────────────────────────────
+  const SIGNAL_WORDS = {
+    // Present Perfect
+    'already': '⚡ Dấu hiệu Hiện tại hoàn thành\n"already" = đã/rồi\nCT: S + have/has + already + V3/ed',
+    'yet': '⚡ Dấu hiệu Hiện tại hoàn thành\n"yet" = chưa (câu phủ) / rồi chưa (câu hỏi)\nCT: S + haven\'t/hasn\'t + V3 + yet',
+    'since': '⚡ Dấu hiệu Hiện tại hoàn thành\n"since" = từ khi... (mốc thời gian)\nCT: S + have/has + V3 + since [time]',
+    'for': '⚡ Có thể là dấu hiệu HT hoàn thành\n"for" = trong khoảng (khoảng thời gian)\nCT: S + have/has + V3 + for [duration]',
+    'ever': '⚡ Dấu hiệu Hiện tại hoàn thành\n"ever" = đã từng (câu hỏi)\nCT: Have/Has + S + ever + V3?',
+    'never': '⚡ Dấu hiệu Hiện tại hoàn thành\n"never" = chưa từng bao giờ\nCT: S + have/has + never + V3',
+    'just': '⚡ Dấu hiệu Hiện tại hoàn thành\n"just" = vừa mới\nCT: S + have/has + just + V3',
+    'recently': '⚡ Dấu hiệu Hiện tại hoàn thành\n"recently" = gần đây\nCT: S + have/has + V3 + recently',
+    'lately': '⚡ Dấu hiệu Hiện tại hoàn thành\n"lately" = dạo gần đây\nCT: S + have/has + V3 + lately',
+    // Past Simple
+    'yesterday': '⏰ Dấu hiệu Quá khứ đơn\n"yesterday" = hôm qua\nCT: S + V2(past)',
+    'ago': '⏰ Dấu hiệu Quá khứ đơn\n"ago" = ... trước\nCT: S + V2 + [time] + ago',
+    'last': '⏰ Dấu hiệu Quá khứ đơn\n"last" year/week/night...\nCT: S + V2 + last [time]',
+    // Future
+    'tomorrow': '🚀 Dấu hiệu Tương lai đơn\n"tomorrow" = ngày mai\nCT: S + will + V(bare)',
+    'soon': '🚀 Có thể là dấu hiệu Tương lai\n"soon" = sớm thôi\nCT: S + will + V(bare)',
+    // Past Perfect
+    'by the time': '🔮 Dấu hiệu Quá khứ hoàn thành\n"by the time" = vào lúc...\nCT: By the time + PS, S + had + V3',
+    'before': '🔮 Có thể là dấu hiệu Quá khứ hoàn thành\nCT: S + had + V3 + before...',
+    'after': '🔮 Có thể là dấu hiệu Quá khứ hoàn thành\nCT: After + S + had + V3...',
+    'when': '🔮 Chú ý: "when" kết hợp với Quá khứ\nKiểm tra 2 vế câu để xác định thì',
+    // Present Continuous
+    'now': '▶ Dấu hiệu Hiện tại tiếp diễn\n"now" = bây giờ (đang xảy ra)\nCT: S + am/is/are + V-ing',
+    'currently': '▶ Dấu hiệu Hiện tại tiếp diễn\n"currently" = hiện tại đang\nCT: S + am/is/are + V-ing',
+    'at the moment': '▶ Dấu hiệu Hiện tại tiếp diễn\n"at the moment" = vào lúc này\nCT: S + am/is/are + V-ing',
+  };
+
+  function highlightSignalWords() {
+    if (state.context?.partType !== 'test') return;
+    if (document.querySelector('.tg-signal-word')) return; // Already highlighted
+
+    // Check if feature is enabled in settings
+    chrome.storage.local.get(['tg_signal_words_enabled'], (d) => {
+      if (d.tg_signal_words_enabled === false) return; // User disabled it
+      _doHighlightSignalWords();
+    });
+  }
+
+  function _doHighlightSignalWords() {
+    if (document.querySelector('.tg-signal-word')) return;
+
+    const allTextNodes = [];
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          const parent = node.parentElement;
+          if (!parent) return NodeFilter.FILTER_REJECT;
+          const tag = parent.tagName;
+          if (['SCRIPT','STYLE','INPUT','TEXTAREA'].includes(tag)) return NodeFilter.FILTER_REJECT;
+          if (parent.closest('[id^="tg-"]') || parent.closest('.tg-tracker-badge')) return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      }
+    );
+
+    let node;
+    while ((node = walker.nextNode())) {
+      allTextNodes.push(node);
+    }
+
+    const signalPhrases = Object.entries(SIGNAL_WORDS).sort((a, b) => b[0].length - a[0].length);
+
+    for (const textNode of allTextNodes) {
+      const text = textNode.textContent;
+      if (!text.trim()) continue;
+
+      let matched = false;
+      let resultHtml = text;
+
+      for (const [signal, tip] of signalPhrases) {
+        const regex = new RegExp(`\\b(${signal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'gi');
+        if (regex.test(resultHtml)) {
+          const escapedTip = tip.replace(/"/g, '&quot;').replace(/\n/g, '&#10;');
+          resultHtml = resultHtml.replace(regex, `<span class="tg-signal-word" data-tip="${escapedTip}">$1</span>`);
+          matched = true;
+        }
+      }
+
+      if (matched && resultHtml !== text) {
+        const span = document.createElement('span');
+        span.innerHTML = resultHtml;
+        textNode.parentNode?.replaceChild(span, textNode);
+      }
+    }
+  }
+
   async function refreshHudExternalData(force = false) {
     const now = Date.now();
     if (!force && (now - state.lastDashboardFetchAt) < 15000) return;
@@ -1251,6 +1347,40 @@
     state.inputTrackers.clear();
     state.answeredInputIds.clear();
     state.lastFocusedInputId = '';
+    state.focusStartTime = 0;
+  }
+
+  function rememberFocusedInput(inputId) {
+    if (state.lastFocusedInputId !== inputId) {
+      state.lastFocusedInputId = inputId;
+      state.focusStartTime = Date.now();
+    }
+  }
+
+  function checkPacing() {
+    if (!state.focusStartTime || !state.lastFocusedInputId || state.context?.partType !== 'test') return;
+    const elapsedSecs = (Date.now() - state.focusStartTime) / 1000;
+    
+    const elapsedEl = document.getElementById('tg-elapsed');
+    if (elapsedSecs > 90) { // 1m30s
+      if (elapsedEl) {
+        elapsedEl.style.color = '#f59e0b'; // orange warning
+        if (Math.floor(elapsedSecs) % 2 === 0) elapsedEl.style.opacity = '0.5';
+        else elapsedEl.style.opacity = '1';
+      }
+      
+      // Show toast once per focus session
+      if (!state.pacingWarned) {
+        state.pacingWarned = true;
+        showToast("⚠️ Bạn đang mất quá nhiều thời gian cho câu này. Hãy dùng nút 'Tiếp' để làm câu dễ trước, lát quay lại sau!");
+      }
+    } else {
+      if (elapsedEl) {
+        elapsedEl.style.color = '';
+        elapsedEl.style.opacity = '1';
+      }
+      state.pacingWarned = false;
+    }
   }
 
   function setupVocabTracking() {
@@ -1419,6 +1549,73 @@
       const classified = classifyError(value, correctAnswer || tracker.english || '');
       state.errorBuckets[classified.key] = (state.errorBuckets[classified.key] || 0) + 1;
       state.lastErrorLabel = classified.label;
+      state.lastErrorContext = {
+        vietnamese: tracker.vietnamese,
+        userInput: value,
+        correctAnswer: correctAnswer || tracker.english || '',
+        promptText: tracker.meta?.promptText || ''
+      };
+
+      // ── Persist error buckets (for Skill Matrix) ──────────────────
+      try {
+        chrome.storage.local.get(['tg_error_buckets'], (result) => {
+          const saved = result.tg_error_buckets || { form: 0, meaning: 0, spelling: 0, spacing: 0 };
+          saved[classified.key] = (saved[classified.key] || 0) + 1;
+          chrome.storage.local.set({ tg_error_buckets: saved });
+        });
+      } catch (_e) {}
+
+      // ── Auto-save to Grammar Vault if we have prompt text ─────────
+      const prompt = tracker.meta?.promptText || '';
+      const answer = correctAnswer || tracker.english || '';
+      if (prompt && answer) {
+        try {
+          chrome.storage.local.get(['tg_grammar_vault'], (result) => {
+            const vault = result.tg_grammar_vault || [];
+            // Create a cloze: replace the correct answer in the sentence with ___
+            let cloze = prompt;
+            // Try to insert blank where the answer would go (after the base verb hint)
+            const verbHint = tracker.baseVerb ? `(${tracker.baseVerb})` : null;
+            if (verbHint && cloze.includes(verbHint)) {
+              cloze = cloze.replace(verbHint, `___ (${tracker.baseVerb})`);
+            } else {
+              // Just append the cloze marker
+              cloze = `${prompt} [___ = ?]`;
+            }
+            // Deduplicate
+            const alreadyExists = vault.some(v => v.sentence === cloze && v.answer === answer);
+            if (!alreadyExists) {
+              vault.unshift({
+                sentence: cloze.replace(/\s*\[___ = \?\]/g, '___'),
+                answer,
+                context: `${state.context?.lessonTitle || 'ThayGiap'} · ${new Date().toLocaleDateString('vi-VN')}`,
+                addedAt: Date.now()
+              });
+              if (vault.length > 100) vault.pop();
+              chrome.storage.local.set({ tg_grammar_vault: vault });
+            }
+          });
+        } catch (_e) {}
+      }
+
+      // Grammar Doctor: Compound Error Diagnostics
+      if (tracker.meta && typeof tracker.meta.questionIndex === 'number') {
+        const siblings = Array.from(state.inputTrackers.values())
+          .filter(t => t.meta?.questionIndex === tracker.meta.questionIndex);
+
+        if (siblings.length > 1) {
+          const sorted = siblings.sort((a, b) => (a.meta?.blankIndex || 0) - (b.meta?.blankIndex || 0));
+          const combinedUserInputs = sorted.map(t => {
+            if (t.inputId === tracker.inputId) return value;
+            const el = document.querySelector(`[data-tg-input-id="${t.inputId}"]`);
+            return el ? el.value.trim() : '';
+          }).filter(Boolean).join(' ');
+
+          state.lastErrorContext.userInput = combinedUserInputs || value;
+          state.lastErrorContext.correctAnswer += ' (Cụm từ phức hợp)';
+          state.lastErrorLabel += ' (Lỗi cấu trúc nhóm)';
+        }
+      }
     }
 
     tracker.attempts.push({ value, isCorrect: resultCorrect, timestamp: Date.now() });
@@ -1948,6 +2145,7 @@
             <div>Đến hạn ôn</div>
             <div id="tg-due-count" class="tg-goal-sub">0 từ</div>
           </div>
+          <div id="tg-mascot" title="Thú ảo học tập" style="font-size:28px; cursor:pointer; margin-left:auto; animation: bounce 2s infinite;" class="tg-mascot">🐱</div>
         </div>
 
         <div class="tg-hud-row tg-errors">
@@ -1956,14 +2154,19 @@
           <span class="tg-error-chip">␣ <span id="tg-err-spacing">0</span></span>
           <span class="tg-error-chip">❓ <span id="tg-err-meaning">0</span></span>
         </div>
-        <div id="tg-last-error" class="tg-last-error"></div>
+        <div id="tg-last-error" class="tg-last-error" style="display:flex; justify-content: space-between; align-items: center;">
+          <span id="tg-last-error-text"></span>
+          <button id="tg-btn-ask-ai" class="tg-mini-btn" style="display:none; padding: 2px 6px;" title="Hỏi AI tại sao sai">✨ Hỏi AI</button>
+        </div>
+        <div id="tg-ai-explanation" class="tg-ai-explanation" style="display:none; font-size: 11px; margin-top: 5px; padding: 6px; background: rgba(0,0,0,0.15); border-left: 2px solid #a855f7; border-radius: 4px; white-space: pre-wrap;"></div>
 
         <div class="tg-hud-row tg-actions">
+          <button class="tg-action-btn" id="tg-btn-pomodoro">🍅 Pomodoro 25:00</button>
           <button class="tg-action-btn" id="tg-btn-add-review">+ Ôn tập</button>
           <button class="tg-action-btn" id="tg-btn-mark-hard">★ Khó</button>
           <button class="tg-action-btn" id="tg-btn-quick5">Ôn nhanh 5</button>
           <button class="tg-action-btn" id="tg-btn-review-3m">Ôn 3 phút</button>
-          <button class="tg-action-btn" id="tg-btn-irregular">ĐTBTQ</button>
+          <button class="tg-action-btn highlight-verb-btn" id="tg-btn-irregular">🔍 Tra Động Từ</button>
           <button class="tg-action-btn" id="tg-btn-fullscreen">Toàn màn hình</button>
           <button class="tg-action-btn" id="tg-btn-focus">Focus: Tắt</button>
         </div>
@@ -2011,9 +2214,15 @@
     });
     badge.querySelector('#tg-btn-fullscreen')?.addEventListener('click', () => requestExamFullscreen('manual'));
     badge.querySelector('#tg-btn-focus')?.addEventListener('click', () => toggleFocusMode());
+    badge.querySelector('#tg-btn-pomodoro')?.addEventListener('click', () => togglePomodoro());
+    badge.querySelector('#tg-btn-ask-ai')?.addEventListener('click', () => askAIAboutLastError());
 
     if (!state.hudTickIntervalId) {
-      state.hudTickIntervalId = setInterval(() => updateBadge(), 1000);
+      state.hudTickIntervalId = setInterval(() => {
+        updateBadge();
+        tickPomodoro();
+        if (typeof checkPacing === 'function') checkPacing();
+      }, 1000);
     }
     if (!state.dashboardRefreshIntervalId) {
       state.dashboardRefreshIntervalId = setInterval(() => refreshHudExternalData(false), 20000);
@@ -2042,7 +2251,8 @@
     const errFormEl = badge.querySelector('#tg-err-form');
     const errSpacingEl = badge.querySelector('#tg-err-spacing');
     const errMeaningEl = badge.querySelector('#tg-err-meaning');
-    const lastErrorEl = badge.querySelector('#tg-last-error');
+    const lastErrorTextEl = badge.querySelector('#tg-last-error-text');
+    const askAiBtnEl = badge.querySelector('#tg-btn-ask-ai');
     const focusBtnEl = badge.querySelector('#tg-btn-focus');
     const selectorWarnEl = badge.querySelector('#tg-selector-warning');
     const goalRingEl = badge.querySelector('#tg-goal-ring');
@@ -2145,9 +2355,14 @@
     if (errFormEl) errFormEl.textContent = state.errorBuckets.form || 0;
     if (errSpacingEl) errSpacingEl.textContent = state.errorBuckets.spacing || 0;
     if (errMeaningEl) errMeaningEl.textContent = state.errorBuckets.meaning || 0;
-    if (lastErrorEl) {
-      if (!state.isTracking) lastErrorEl.textContent = 'Tracking đang tắt.';
-      else lastErrorEl.textContent = state.lastErrorLabel ? `Lỗi gần nhất: ${state.lastErrorLabel}` : '';
+    if (lastErrorTextEl) {
+      if (!state.isTracking) {
+        lastErrorTextEl.textContent = 'Tracking đang tắt.';
+        if (askAiBtnEl) askAiBtnEl.style.display = 'none';
+      } else {
+        lastErrorTextEl.textContent = state.lastErrorLabel ? `Lỗi gần nhất: ${state.lastErrorLabel}` : '';
+        if (askAiBtnEl) askAiBtnEl.style.display = state.lastErrorContext ? 'block' : 'none';
+      }
     }
 
     if (focusBtnEl) {
@@ -2163,6 +2378,59 @@
       goalRingEl.style.background = `conic-gradient(#34d399 ${pct * 3.6}deg, rgba(255,255,255,0.12) 0deg)`;
       goalRingTextEl.textContent = `${pct}%`;
       goalTextEl.textContent = `${state.todayAttempts || 0} / ${state.goalDailyAttempt || 0}`;
+    }
+
+    const mascot = badge.querySelector('#tg-mascot');
+    if (mascot) {
+      // Streak-based sizing: bigger = better streak (Tamagotchi growth)
+      const streak = state.sessionCorrect - state.sessionWrong;
+      const streakScale = Math.min(2.0, 1.0 + (streak > 0 ? streak * 0.08 : 0));
+      
+      let emoji = '🐣'; // Default: hatching
+      let titleText = 'Thú ảo của bạn đang chờ...';
+      
+      if (state.goalProgressPct >= 100) {
+        emoji = '🦁';  // Goal complete: mighty lion
+        titleText = 'MÃO! Bạn đã đạt mục tiêu hôm nay! 🎉';
+      } else if (streak >= 10) {
+        emoji = '🔥🐉🔥'; // Epic fire dragon
+        titleText = `Chuỗi ${streak} đúng liên tiếp! Rồng lửa hiển linh!`;
+      } else if (streak >= 5) {
+        emoji = '🦄';   // Unicorn
+        titleText = `Streak ${streak}! Kỳ lân thức giấc!`;
+      } else if (streak >= 3) {
+        emoji = '🐯';  // Tiger
+        titleText = `Streak ${streak}! Hổ con đang hứng!`;
+      } else if (state.sessionWrong > 5 && state.sessionCorrect === 0) {
+        emoji = '😭';  // Crying
+        titleText = 'Ôi, sai nhiều quá! Cố lên bạn ơi!';
+      } else if (state.sessionWrong > state.sessionCorrect && state.sessionWrong > 0) {
+        emoji = '😓';  // Sweating
+        titleText = 'Đang vất vả nhưng đừng bỏ cuộc!';
+      } else if (state.sessionCorrect > state.sessionWrong && state.sessionCorrect > 0) {
+        emoji = '😸';  // Happy cat
+        titleText = 'Làm tốt lắm! Tiếp tục đi!';
+      } else if (state.todayAttempts === 0) {
+        emoji = '😴';  // Sleeping - no activity today
+        titleText = 'Thú ảo đang ngủ... Hãy bắt đầu học để đánh thức nó!';
+      } else {
+        emoji = '🐱';  // Normal cat
+        titleText = 'Thú ảo đang theo dõi bạn...';
+      }
+      
+      mascot.innerText = emoji;
+      mascot.style.transform = `scale(${streakScale.toFixed(2)})`;
+      mascot.style.fontSize = streak >= 10 ? '22px' : '18px';
+      mascot.title = titleText;
+      
+      // Add bounce animation when reaching a streak milestone
+      if ([3, 5, 10].includes(streak) && !mascot.dataset.lastStreakAnim) {
+        mascot.dataset.lastStreakAnim = streak;
+        mascot.style.animation = 'tgMascotBounce 0.5s ease';
+        setTimeout(() => { mascot.style.animation = ''; }, 600);
+      } else if (streak < 3) {
+        delete mascot.dataset.lastStreakAnim;
+      }
     }
 
     badge.style.opacity = state.isTracking ? '1' : '0.65';
@@ -2382,12 +2650,284 @@
           setupVocabTracking();
         }
         updateBadge();
+        highlightSignalWords();
       }, 3000);
+    }
+  }
+
+  // ============ Pomodoro & AI ============
+
+  function togglePomodoro() {
+    state.pomodoroIsRunning = !state.pomodoroIsRunning;
+    const btn = document.getElementById('tg-btn-pomodoro');
+    
+    // Broadcast state to background to act on tabs (e.g. block social media)
+    chrome.runtime.sendMessage({ 
+      action: 'pomodoro_state', 
+      isRunning: state.pomodoroIsRunning,
+      isBreak: state.pomodoroIsBreak
+    });
+
+    if (btn) {
+      if (state.pomodoroIsRunning) {
+        btn.innerHTML = state.pomodoroIsBreak ? `⏸ Nghỉ (${formatPomodoroTime()})` : `⏸ Học (${formatPomodoroTime()})`;
+      } else {
+        btn.innerHTML = state.pomodoroIsBreak ? `▶ Nghỉ (${formatPomodoroTime()})` : `▶ Học (${formatPomodoroTime()})`;
+      }
+    }
+  }
+
+  function tickPomodoro() {
+    if (!state.pomodoroIsRunning) return;
+    
+    state.pomodoroTimeLeft--;
+    
+    if (state.pomodoroTimeLeft <= 0) {
+      // Toggle break
+      state.pomodoroIsBreak = !state.pomodoroIsBreak;
+      state.pomodoroTimeLeft = state.pomodoroIsBreak ? 5 * 60 : 25 * 60;
+      
+      try {
+        chrome.runtime.sendMessage({ action: 'notify_pomodoro', isBreak: state.pomodoroIsBreak });
+      } catch (e) {}
+
+      showToast(state.pomodoroIsBreak ? 'Đã đến giờ giải lao 5 phút!' : 'Bắt đầu session học tập 25 phút!');
+      
+      const btn = document.getElementById('tg-btn-pomodoro');
+      if (btn) {
+        btn.innerHTML = state.pomodoroIsBreak ? `⏸ Nghỉ (${formatPomodoroTime()})` : `⏸ Học (${formatPomodoroTime()})`;
+      }
+      
+      // Notify background to update block rules
+      chrome.runtime.sendMessage({ 
+        action: 'pomodoro_state', 
+        isRunning: state.pomodoroIsRunning,
+        isBreak: state.pomodoroIsBreak
+      });
+    } else {
+      const btn = document.getElementById('tg-btn-pomodoro');
+      if (btn) {
+        btn.innerHTML = state.pomodoroIsRunning 
+          ? (state.pomodoroIsBreak ? `⏸ Nghỉ (${formatPomodoroTime()})` : `⏸ Học (${formatPomodoroTime()})`)
+          : (state.pomodoroIsBreak ? `▶ Nghỉ (${formatPomodoroTime()})` : `▶ Học (${formatPomodoroTime()})`);
+      }
+    }
+  }
+
+  function formatPomodoroTime() {
+    const mins = Math.floor(state.pomodoroTimeLeft / 60).toString().padStart(2, '0');
+    const secs = (state.pomodoroTimeLeft % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  }
+
+  function askAIAboutLastError() {
+    if (!state.lastErrorContext) return;
+    const btn = document.getElementById('tg-btn-ask-ai');
+    const display = document.getElementById('tg-ai-explanation');
+    
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Đang hỏi AI...';
+    }
+    if (display) {
+      display.style.display = 'block';
+      display.textContent = 'Đang phân tích lỗi sai của bạn...';
+    }
+
+    const { vietnamese, userInput, correctAnswer, promptText } = state.lastErrorContext;
+    const prompt = `Học sinh đang làm bài và dịch câu tiếng Việt: "${vietnamese}".\n${promptText ? 'Ngữ cảnh bài: ' + promptText + '\n' : ''}Học sinh nhập: "${userInput}".\nĐáp án đúng là: "${correctAnswer}".\nHãy giải thích ngắn gọn, dễ hiểu lý do học sinh sai và cách ghi nhớ đúng.`;
+
+    chrome.runtime.sendMessage({
+      action: 'ask_ai',
+      aiType: 'grammar',
+      wordOrContext: prompt
+    }, (response) => {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '✨ Hỏi AI';
+        btn.style.display = 'none'; // hide after asking successfully to prevent spam
+      }
+      
+      if (!response) {
+        if (display) display.textContent = 'Không có phản hồi từ AI.';
+        return;
+      }
+      
+      if (response.error) {
+        if (display) {
+          display.innerHTML = `<span style="color:red">Lỗi AI: ${escapeHtmlText(response.error.message || response.error)}</span><br/><a href="${chrome.runtime.getURL('options/options.html')}" target="_blank" style="color:var(--accent-blue); text-decoration:underline;">Mở cài đặt AI</a>`;
+        }
+      } else if (response.result) {
+        if (display) {
+          display.innerHTML = escapeHtmlText(response.result).replace(/\\n/g, '<br/>');
+        }
+      } else {
+        if (display) display.textContent = 'Lỗi không xác định.';
+      }
+    });
+  }
+
+  // ============ Omni Command Palette ============
+  let omniState = { open: false, items: [], index: 0 };
+  
+  function getOmniCommands() {
+    return [
+      { id: 'review', label: 'Mở tab Ôn tập offline', subtitle: '> review', action: () => openOptionsWithPreset('review') },
+      { id: 'focus_toggle', label: 'Bật/tắt chế độ Focus Mode', subtitle: '! focus', action: toggleFocusMode },
+      { id: 'lookup_verb', label: 'Động từ bất quy tắc', subtitle: '?', action: () => toggleVerbLookupPanel(true) },
+      { id: 'exam_microtest', label: 'Bắt đầu Micro-test Lỗi sai', subtitle: '> micro-test', action: () => openOptionsWithPreset('micro-test') },
+      { id: 'stats', label: 'Xem Báo cáo Tổng quan', subtitle: '> stats', action: () => openOptionsWithPreset('stats') }
+    ];
+  }
+
+  function toggleOmniPalette() {
+    omniState.open = !omniState.open;
+    let backdrop = document.getElementById('tg-omni-backdrop');
+    let palette = document.getElementById('tg-omni-palette');
+
+    if (!backdrop) {
+      backdrop = document.createElement('div');
+      backdrop.id = 'tg-omni-backdrop';
+      document.body.appendChild(backdrop);
+      backdrop.addEventListener('click', toggleOmniPalette);
+
+      palette = document.createElement('div');
+      palette.id = 'tg-omni-palette';
+      palette.innerHTML = `
+        <input type="text" class="tg-omni-input" placeholder="Gõ lệnh hoặc tra từ (Ví dụ: > review, ! focus)..." id="tg-omni-input" autocomplete="off" spellcheck="false" />
+        <div class="tg-omni-results" id="tg-omni-results"></div>
+      `;
+      document.body.appendChild(palette);
+
+      const input = document.getElementById('tg-omni-input');
+      input.addEventListener('input', renderOmniResults);
+      input.addEventListener('keydown', handleOmniKeydown);
+    }
+
+    if (omniState.open) {
+      backdrop.classList.add('tg-show');
+      palette.classList.add('tg-show');
+      setTimeout(() => document.getElementById('tg-omni-input').focus(), 50);
+      renderOmniResults();
+    } else {
+      backdrop.classList.remove('tg-show');
+      palette.classList.remove('tg-show');
+      document.getElementById('tg-omni-input').value = '';
+    }
+  }
+
+  function renderOmniResults() {
+    const inputStr = document.getElementById('tg-omni-input').value.toLowerCase().trim();
+    const resultsContainer = document.getElementById('tg-omni-results');
+    
+    // Command matching
+    const commands = getOmniCommands().filter(c => 
+      c.subtitle.toLowerCase().includes(inputStr) || 
+      c.label.toLowerCase().includes(inputStr) ||
+      inputStr === ''
+    );
+    
+    omniState.items = commands;
+    omniState.index = 0;
+    
+    resultsContainer.innerHTML = '';
+    if (commands.length === 0) {
+      resultsContainer.innerHTML = `<div style="padding: 16px 24px; color: #64748b; text-align: center;">Không tìm thấy lệnh hoặc từ vựng tương ứng.</div>`;
+      return;
+    }
+
+    commands.forEach((c, i) => {
+      const item = document.createElement('div');
+      item.className = 'tg-omni-item' + (i === 0 ? ' tg-selected' : '');
+      item.innerHTML = `
+        <span style="font-weight: 600;">${c.label}</span>
+        <span class="tg-omni-shortcut">${c.subtitle}</span>
+      `;
+      item.addEventListener('click', () => {
+        toggleOmniPalette();
+        c.action();
+      });
+      resultsContainer.appendChild(item);
+    });
+  }
+
+  function handleOmniKeydown(e) {
+    const resultsContainer = document.getElementById('tg-omni-results');
+    const items = resultsContainer.querySelectorAll('.tg-omni-item');
+    if (items.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      items[omniState.index].classList.remove('tg-selected');
+      omniState.index = (omniState.index + 1) % items.length;
+      items[omniState.index].classList.add('tg-selected');
+      items[omniState.index].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      items[omniState.index].classList.remove('tg-selected');
+      omniState.index = (omniState.index - 1 + items.length) % items.length;
+      items[omniState.index].classList.add('tg-selected');
+      items[omniState.index].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      toggleOmniPalette();
+      omniState.items[omniState.index].action();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      toggleOmniPalette();
     }
   }
 
   // ============ Hotkeys ============
   document.addEventListener('keydown', (e) => {
+    // Escape omni palette
+    if (e.key === 'Escape' && omniState.open) {
+      toggleOmniPalette();
+      return;
+    }
+    
+    // Omni Command Palette shortcut (Ctrl+K / Cmd+K)
+    if (e.code === 'KeyK' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      toggleOmniPalette();
+      return;
+    }
+
+    // Smart Exam Navigation Hotkeys
+    if (e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (e.code === 'ArrowRight') {
+        const nextBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Tiếp') || (b.className && b.className.includes('next')));
+        if (nextBtn && !nextBtn.disabled) {
+          e.preventDefault();
+          nextBtn.click();
+          showToast('Tiếp tục ⏭');
+        }
+        return;
+      }
+      if (e.code === 'Enter') {
+        const submitBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Nộp bài') || (b.className && b.className.includes('submit')));
+        if (submitBtn && !submitBtn.disabled) {
+          e.preventDefault();
+          if (confirm('Bạn chắc chắn muốn nộp bài?')) {
+            submitBtn.click();
+          }
+        }
+        return;
+      }
+    }
+
+    if (e.code === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+      const active = document.activeElement;
+      if (active && active.tagName === 'INPUT' && active.type === 'text') {
+        const inputs = Array.from(document.querySelectorAll('input[type="text"]')).filter(i => i.getBoundingClientRect().width > 0);
+        const idx = inputs.indexOf(active);
+        if (idx !== -1 && idx < inputs.length - 1) {
+          e.preventDefault();
+          inputs[idx + 1].focus();
+        }
+      }
+    }
+
     if (!e.altKey || e.ctrlKey || e.metaKey) return;
 
     if (e.code === 'KeyA' || e.code === 'KeyR') {

@@ -477,3 +477,51 @@ body::-webkit-scrollbar-thumb:hover {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ============ Verb Lookup ============ */
+.verb-lookup-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.verb-input {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.verb-input:focus {
+  border-color: var(--accent-green);
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.2);
+}
+
+.verb-result {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-left: 3px solid transparent;
+  line-height: 1.4;
+}
+
+.verb-result.has-result {
+  border-left-color: var(--accent-green);
+  color: var(--text-primary);
+}
+
+.verb-result.is-regular {
+  border-left-color: var(--accent-yellow);
+}
+
+.verb-result strong {
+  color: var(--accent-green);
+}
+

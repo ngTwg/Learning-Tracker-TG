@@ -17,6 +17,13 @@ const CONTEXT_MENU_ADD_REVIEW = 'tg-add-selection-review';
 const examLockByWindow = new Map(); // windowId -> { tabId, updatedAt }
 const examLockNotifyByTab = new Map(); // tabId -> timestamp
 
+// ============ Pomodoro State ============
+let isPomodoroRunning = false;
+let isPomodoroBreak = false;
+const BLOCKED_SITES = [
+  'facebook.com', 'instagram.com', 'twitter.com', 'x.com', 'tiktok.com', 'reddit.com'
+];
+
 // ============ Message Handler ============
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || !message.action) {
@@ -90,8 +97,118 @@ async function handleMessage(message, sender) {
     case 'exam_lock_update':
       return handleExamLockUpdate(message, sender);
 
+    case 'ask_ai':
+      return await handleAskAi(message);
+
+    case 'pomodoro_state':
+      isPomodoroRunning = message.isRunning;
+      isPomodoroBreak = message.isBreak;
+      if (isPomodoroRunning && !isPomodoroBreak) enforcePomodoroBlock();
+      return { ok: true };
+
+    case 'notify_pomodoro':
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: message.isBreak ? 'Đến giờ nghỉ giải lao! (5 phút)' : 'Hết giờ nghỉ! Quay lại học nhé (25 phút)',
+        message: 'Pomodoro timer',
+        priority: 2
+      });
+      return { ok: true };
+
     default:
       return { ok: false, error: `Unknown action: ${message.action}` };
+  }
+}
+
+async function handleAskAi(message) {
+  const settings = await getSettings();
+  const provider = settings.aiProvider || 'none';
+  const apiKey = settings.aiKey || '';
+
+  if (provider === 'none' || !apiKey) {
+    return { ok: false, error: 'AI provider or API key is not configured.' };
+  }
+
+  const payload = message.payload || {};
+  const aiType = message.aiType || payload.aiType;
+  const wordOrContext = message.wordOrContext || payload.wordOrContext;
+  const word = message.word || payload.word;
+  const contextInfo = message.contextInfo || payload.contextInfo;
+  const history = message.history || payload.history;
+
+  let prompt = '';
+
+  if (aiType === 'example') {
+    prompt = `Bạn là một giáo viên tiếng Anh xuất sắc. Hãy đưa ra 3 câu ví dụ dễ hiểu mang tính ứng dụng cao chứa từ vựng "${word || wordOrContext}" (nếu có thể, hãy dịch nghĩa tiếng Việt cho các ví dụ này). Lời giải thích phải rất ngắn gọn, trực quan, dễ nhớ.`;
+  } else if (aiType === 'grammar') {
+    if (wordOrContext && wordOrContext.includes('Học sinh nhập:')) {
+      prompt = wordOrContext; // Use the rich prompt passed directly from content script
+    } else {
+      prompt = `Bạn là một giáo viên tiếng Anh xuất sắc. Học sinh làm bài kiểm tra và đã gõ sai phần này.
+Ngữ cảnh (câu hỏi/từ): "${contextInfo || word || wordOrContext}"
+Học sinh gõ sai thành: "${history ? history.map(h => h.typed).join(', ') : '?'}"
+Hãy giải thích siêu ngắn gọn (tối đa 3 câu) tại sao học sinh sai, và quy tắc đúng là gì. Không dùng quá nhiều thuật ngữ phức tạp.`;
+    }
+  } else {
+    return { ok: false, error: 'Invalid AI prompt type.' };
+  }
+
+  try {
+    let resultText = '';
+    
+    if (provider === 'openai') {
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7
+        })
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      resultText = data.choices[0].message.content;
+
+    } else if (provider === 'gemini') {
+      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      resultText = data.candidates[0].content.parts[0].text;
+
+    } else if (provider === 'openrouter') {
+      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      resultText = data.choices[0].message.content;
+    }
+
+    return { ok: true, data: resultText };
+  } catch (error) {
+    console.error('AI API error:', error);
+    return { ok: false, error: 'AI Request failed: ' + error.message };
   }
 }
 
@@ -455,6 +572,29 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       }
     } catch (err) {
       console.error('[ThayGiap Tracker] Error checking review count:', err);
+    }
+  }
+});
+
+// ============ Pomodoro Networking Block ============
+
+async function enforcePomodoroBlock() {
+  if (!isPomodoroRunning || isPomodoroBreak) return;
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (tab.url) {
+        if (BLOCKED_SITES.some(site => tab.url.includes(site))) {
+          chrome.tabs.remove(tab.id).catch(() => {});
+        }
+      }
+    });
+  });
+}
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (isPomodoroRunning && !isPomodoroBreak && tab && tab.url) {
+    if (BLOCKED_SITES.some(site => tab.url.includes(site))) {
+      chrome.tabs.remove(tabId).catch(() => {});
     }
   }
 });

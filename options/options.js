@@ -67,7 +67,7 @@ async function applyInitialRoute() {
     return;
   }
 
-  const knownTabs = ['overview', 'vocab', 'wrong-inputs', 'review', 'goals', 'weakness', 'offline', 'sessions', 'history', 'settings'];
+  const knownTabs = ['overview', 'vocab', 'wrong-inputs', 'review', 'goals', 'weakness', 'offline', 'sessions', 'history', 'settings', 'sentence-forge', 'vocab-dungeon'];
   if (knownTabs.includes(hash)) {
     activateTabById(hash);
   }
@@ -101,6 +101,10 @@ async function loadTabData(tabId) {
     case 'sessions':     await loadSessionsTab(); break;
     case 'history':      await loadHistoryTab(); break;
     case 'settings':     await loadSettingsTab(); break;
+    case 'sentence-forge': await loadSentenceForgeTab(); break;
+    case 'vocab-dungeon':  await loadVocabDungeonTab(); break;
+    case 'grammar-vault':  await loadGrammarVaultTab(); break;
+    case 'skill-matrix':   await loadSkillMatrixTab(); break;
   }
 }
 
@@ -449,8 +453,11 @@ function renderWrongInputs() {
         </div>
         <div class="wi-card-body">
           <div class="wi-attempts-title">Lịch sử từng lần gõ sai (${history.length} lần)</div>
-          <div class="wi-attempts-list">${attemptsHtml}</div>
-          <div class="wi-card-actions">${inReviewBtn}</div>
+          <div class="wi-card-actions">
+            ${inReviewBtn}
+            <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px; margin-left:8px;" onclick="generateMnemonic('${viEncoded}', '${encodeURIComponent(entry.english || '?')}', this)">💡 Tạo Mẹo Nhớ</button>
+            <div class="mnemonic-result" style="display:none; margin-top:10px; padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; font-style:italic; font-size:13px; width:100%; text-align:left;"></div>
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -466,6 +473,33 @@ window.addToReview = async function(vietnamese) {
 window.removeFromReview = async function(vietnamese) {
   await sendMessage({ action: 'mark_review_correct', vietnamese });
   await loadWrongInputsTab();
+};
+
+window.generateMnemonic = async function(viEncoded, enEncoded, btn) {
+  const vi = decodeURIComponent(viEncoded);
+  const en = decodeURIComponent(enEncoded);
+  const resultDiv = btn.nextElementSibling;
+  
+  btn.disabled = true;
+  btn.textContent = 'Đang phân tích...';
+  resultDiv.style.display = 'block';
+  resultDiv.textContent = 'Đang tìm mẹo liên tưởng...';
+
+  const prompt = `Hãy đóng vai chuyên gia ngôn ngữ học. Ta cần tạo một câu mẹo liên tưởng (Mnemonic) cực kỳ hài hước và dễ nhớ bằng tiếng Việt để ghi nhớ từ vựng tiếng Anh sau:\n- Từ tiếng Anh: ${en}\n- Nghĩa tiếng Việt: ${vi}\nBạn có thể chơi chữ, mượn âm tương đồng tiếng Việt hoặc chẻ từ thành các phần nhỏ (root/prefix) để kể một câu chuyện siêu ngắn gọn. Chỉ trả về giải thích ngắn.`;
+
+  chrome.runtime.sendMessage({
+    action: 'ask_ai',
+    aiType: 'grammar', // reuse the built in endpoint
+    wordOrContext: prompt
+  }, (response) => {
+    btn.disabled = false;
+    btn.textContent = '💡 Tạo mẹo khác';
+    if (!response || response.error) {
+      resultDiv.textContent = 'Phản hồi thất bại từ AI: ' + (response?.error || 'Unknown Error');
+    } else {
+      resultDiv.innerHTML = (response.data || '').replace(/\n/g, '<br>');
+    }
+  });
 };
 
 // ============ Review / Flashcard Tab — Full Implementation ============
@@ -1335,6 +1369,19 @@ async function loadWeaknessTab() {
       <div class="event-result wrong">✗ ${item.wrongAttempts}</div>
     </div>
   `).join('');
+
+  bindClickOnce('btn-weakness-micro-test', async () => {
+    activateTabById('review');
+    await loadReviewTab();
+    applyRvPreset({
+      count: 5,
+      minWrong: 1, // Only words that have been wrong at least once
+      order: 'shuffle',
+      direction: 'mixed',
+      mode: 'choice4', // micro-test is usually quick choice format
+      autoStart: true
+    });
+  });
 }
 
 function classifyWrongPattern(typedRaw, correctRaw) {
@@ -1671,6 +1718,12 @@ async function loadSettingsTab() {
   if (hudAutoMinimizeCheckbox) hudAutoMinimizeCheckbox.checked = settings.hudAutoMinimizeEnabled !== false;
   vocabCompactMode = !!settings.vocabCompactMode;
 
+  const aiProviderSelect = document.getElementById('setting-ai-provider');
+  const aiKeyInput = document.getElementById('setting-ai-key');
+  if (aiProviderSelect) aiProviderSelect.value = settings.aiProvider || 'none';
+  if (aiKeyInput) aiKeyInput.value = settings.aiKey || '';
+  updateAiHelpText();
+
   // Data stats
   const eventsRes = await sendMessage({ action: 'get_events' });
   const vocabRes = await sendMessage({ action: 'get_vocab_summaries' });
@@ -1695,6 +1748,31 @@ function setupSettingsActions() {
         action: 'update_settings',
         settings: { trackingEnabled: trackingCheckbox.checked }
       });
+    });
+  }
+
+  const aiProviderSelect = document.getElementById('setting-ai-provider');
+  if (aiProviderSelect) {
+    aiProviderSelect.addEventListener('change', () => {
+      const provider = aiProviderSelect.value;
+      sendMessage({
+        action: 'update_settings',
+        settings: { aiProvider: provider }
+      });
+      updateAiHelpText();
+    });
+  }
+
+  const btnSaveAiKey = document.getElementById('btn-save-ai-key');
+  const aiKeyInput = document.getElementById('setting-ai-key');
+  if (btnSaveAiKey && aiKeyInput) {
+    btnSaveAiKey.addEventListener('click', () => {
+      sendMessage({
+        action: 'update_settings',
+        settings: { aiKey: aiKeyInput.value.trim() }
+      });
+      btnSaveAiKey.textContent = 'Đã lưu ✓';
+      setTimeout(() => btnSaveAiKey.textContent = 'Lưu Key', 2000);
     });
   }
 
@@ -1735,6 +1813,28 @@ function setupSettingsActions() {
         action: 'update_settings',
         settings: { hudAutoMinimizeEnabled: hudAutoMinimizeCheckbox.checked }
       });
+    });
+  }
+
+  // Tanglish Mode toggle
+  const tanglishCb = document.getElementById('setting-tanglish');
+  if (tanglishCb) {
+    chrome.storage.local.get(['tg_tanglish_enabled'], (d) => {
+      tanglishCb.checked = d.tg_tanglish_enabled !== false;
+    });
+    tanglishCb.addEventListener('change', () => {
+      chrome.storage.local.set({ tg_tanglish_enabled: tanglishCb.checked });
+    });
+  }
+
+  // Signal Word Highlighter toggle
+  const signalWordCb = document.getElementById('setting-signal-words');
+  if (signalWordCb) {
+    chrome.storage.local.get(['tg_signal_words_enabled'], (d) => {
+      signalWordCb.checked = d.tg_signal_words_enabled !== false; // default ON
+    });
+    signalWordCb.addEventListener('change', () => {
+      chrome.storage.local.set({ tg_signal_words_enabled: signalWordCb.checked });
     });
   }
 
@@ -1823,6 +1923,376 @@ function setupSettingsActions() {
         }
       }
     });
+  }
+}
+
+function updateAiHelpText() {
+  const provider = document.getElementById('setting-ai-provider')?.value || 'none';
+  const container = document.getElementById('ai-key-container');
+  const helpText = document.getElementById('ai-help-text');
+  
+  if (provider === 'none') {
+    if (container) container.style.display = 'none';
+    return;
+  }
+  
+  if (container) container.style.display = 'block';
+  if (!helpText) return;
+
+  if (provider === 'openai') {
+    helpText.innerHTML = `<strong>Hướng dẫn lấy OpenAI API Key:</strong><br>
+    1. Truy cập <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--accent-blue)">platform.openai.com/api-keys</a><br>
+    2. Đăng nhập hoặc tạo tài khoản mới.<br>
+    3. Nhấn nút <strong>Create new secret key</strong>.<br>
+    4. Copy đoạn mã bắt đầu bằng <code>sk-...</code> và dán vào ô bên trên.<br>
+    <em>Lưu ý: OpenAI yêu cầu bạn phải nạp sẵn tiền (trả trước) thì tài khoản mới dùng được API.</em>`;
+  } else if (provider === 'gemini') {
+    helpText.innerHTML = `<strong>Hướng dẫn lấy Gemini API Key (Miễn phí):</strong><br>
+    1. Truy cập <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent-blue)">Google AI Studio</a><br>
+    2. Đăng nhập bằng tài khoản Google.<br>
+    3. Nhấn nút <strong>Create API Key</strong>.<br>
+    4. Copy đoạn mã key hiển thị và dán vào ô bên trên.<br>
+    <em>Lưu ý: Gemini API hiện đang thu phí hoặc giới hạn tùy quốc gia, tuy nhiên gói miễn phí khá rộng rãi.</em>`;
+  } else if (provider === 'openrouter') {
+    helpText.innerHTML = `<strong>Hướng dẫn lấy OpenRouter API Key (Hỗ trợ nhiều model miễn phí):</strong><br>
+    1. Truy cập <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--accent-blue)">openrouter.ai/keys</a><br>
+    2. Đăng nhập bằng Google/Email.<br>
+    3. Nhấn nút <strong>Create Key</strong>.<br>
+    4. Copy đoạn mã bắt đầu bằng <code>sk-or-...</code> và dán vào ô bên trên.<br>
+    <em>Lưu ý: Bạn có thể chọn model ở cấu hình nâng cao, mặc định sẽ dùng dòng Claude Haiku hoặc Gemini Flash cực nhanh miễn phí.</em>`;
+  }
+}
+
+// ============ Sentence Forge Tab ============
+let sentenceForgeWords = [];
+
+async function loadSentenceForgeTab() {
+  const sfInput = document.getElementById('sf-user-input');
+  const sfResult = document.getElementById('sf-result-container');
+  const msgEl = document.getElementById('sf-feedback-msg');
+  if (sfInput) sfInput.value = '';
+  if (sfResult) sfResult.style.display = 'none';
+  if (msgEl) msgEl.textContent = '';
+  
+  await fetchSFWords();
+  
+  const btnReroll = document.getElementById('btn-sf-reroll');
+  if (btnReroll) {
+    btnReroll.onclick = async () => {
+      if (sfInput) sfInput.value = '';
+      if (sfResult) sfResult.style.display = 'none';
+      if (msgEl) msgEl.textContent = '';
+      await fetchSFWords();
+    };
+  }
+
+  const btnSubmit = document.getElementById('btn-sf-submit');
+  if (btnSubmit) {
+    btnSubmit.onclick = async () => {
+      const text = sfInput?.value.trim() || '';
+      if (!text) {
+        if (msgEl) msgEl.textContent = 'Vui lòng viết ít nhất một câu!';
+        return;
+      }
+      
+      const missing = sentenceForgeWords.filter(w => !text.toLowerCase().includes((w.english || '').toLowerCase()));
+      if (missing.length > 0) {
+        if (msgEl) msgEl.textContent = `Bạn chưa dùng các từ: ${missing.map(m => m.english).join(', ')}`;
+        return;
+      }
+      
+      btnSubmit.disabled = true;
+      if (msgEl) msgEl.textContent = 'Đang gửi cho AI phân tích...';
+      
+      const res = await sendMessage({
+        action: 'ask_ai',
+        aiType: 'grammar',
+        wordOrContext: `Học sinh được yêu cầu viết câu dùng các từ: ${sentenceForgeWords.map(w => w.english).join(', ')}. Học sinh đã viết: "${text}". Hãy nhận xét xem học sinh viết đúng ngữ pháp không, dùng từ có tự nhiên không, và sửa lại câu cho hay hơn (nếu có lỗi).`
+      });
+      
+      btnSubmit.disabled = false;
+      if (msgEl) msgEl.textContent = '';
+      if (sfResult) {
+        sfResult.style.display = 'block';
+        if (res && res.result) {
+          sfResult.innerHTML = `<strong>Nhận xét từ AI:</strong><br><br>` + escapeHtml(res.result).replace(/\\n/g, '<br/>');
+        } else {
+          sfResult.innerHTML = `<span style="color:var(--accent-red)">Lỗi khi gọi AI. Hãy kiểm tra lại API Key ở phần Cài đặt.</span>`;
+        }
+      }
+    };
+  }
+}
+
+async function fetchSFWords() {
+  const res = await sendMessage({ action: 'get_vocab_summaries' });
+  const entries = Object.values(res?.data || {}).filter(w => w.english && w.vietnamese);
+  
+  // Try to pick from learning/reviewing/most wrong
+  entries.sort(() => Math.random() - 0.5);
+  sentenceForgeWords = entries.slice(0, 3);
+  
+  const listEl = document.getElementById('sf-words-list');
+  if (listEl) {
+    listEl.innerHTML = sentenceForgeWords.map(w => `
+      <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 12px 18px; display: flex; flex-direction: column; gap: 4px;">
+        <span style="color: #38bdf8; font-weight: 700; font-size: 18px;">${escapeHtml(w.english)}</span>
+        <span style="color: #94a3b8; font-size: 13px;">${escapeHtml(w.vietnamese)}</span>
+      </div>
+    `).join('');
+  }
+}
+
+// ============ Vocab Dungeon Tab ============
+let vdState = {
+  running: false,
+  words: [],
+  currentFloor: 0,
+  hp: 3,
+  timeLeft: 10,
+  timerInterval: null
+};
+
+async function loadVocabDungeonTab() {
+  const startBtn = document.getElementById('btn-vd-start');
+  if (startBtn) {
+    startBtn.onclick = startDungeon;
+  }
+  
+  const input = document.getElementById('vd-input');
+  if (input) {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleDungeonAnswer();
+    });
+  }
+}
+
+async function startDungeon() {
+  document.getElementById('vd-start-screen').style.display = 'none';
+  document.getElementById('vd-game-screen').style.display = 'block';
+  
+  const res = await sendMessage({ action: 'get_review_list' });
+  let pool = res?.data || [];
+  
+  if (pool.length < 20) {
+    const sumRes = await sendMessage({ action: 'get_vocab_summaries' });
+    const dict = sumRes?.data || {};
+    const all = Object.values(dict).filter(w => w.english && w.vietnamese);
+    all.sort(() => Math.random() - 0.5);
+    pool = pool.concat(all).slice(0, 20);
+  } else {
+    pool = pool.sort(() => Math.random() - 0.5).slice(0, 20);
+  }
+  
+  vdState = {
+    running: true,
+    words: pool,
+    currentFloor: 0,
+    hp: 3,
+    timeLeft: 10,
+    timerInterval: null
+  };
+  
+  renderVdHud();
+  nextVdFloor();
+}
+
+function renderVdHud() {
+  const hpBar = document.getElementById('vd-hp-bar');
+  if (hpBar) {
+    hpBar.innerHTML = Array(3).fill('🖤').map((heart, i) => i < vdState.hp ? '❤️' : '🖤').join('');
+  }
+  const floorEl = document.getElementById('vd-floor');
+  if (floorEl) {
+    floorEl.textContent = `${Math.min(vdState.currentFloor + 1, 20)}/20`;
+  }
+}
+
+function nextVdFloor() {
+  if (vdState.hp <= 0) {
+    endDungeon(false);
+    return;
+  }
+  
+  if (vdState.currentFloor >= vdState.words.length || vdState.currentFloor >= 20) {
+    endDungeon(true);
+    return;
+  }
+  
+  renderVdHud();
+  
+  const word = vdState.words[vdState.currentFloor];
+  const nameEl = document.getElementById('vd-monster-name');
+  if (nameEl) nameEl.textContent = word.vietnamese || '???';
+  
+  const input = document.getElementById('vd-input');
+  if (input) {
+    input.value = '';
+    input.focus();
+    input.style.borderColor = '#334155';
+    input.disabled = false;
+  }
+  
+  const monster = document.getElementById('vd-monster');
+  if (monster) {
+    const emojis = ['👿', '👹', '👺', '👾', '🧟', '🧛', '🐲', '☠️'];
+    monster.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    monster.style.transform = 'translateY(0) scale(1)';
+    monster.style.opacity = '1';
+  }
+  
+  startVdTimer();
+}
+
+function startVdTimer() {
+  if (vdState.timerInterval) clearInterval(vdState.timerInterval);
+  vdState.timeLeft = 10; // 10 seconds per monster
+  updateVdTimerBar();
+  
+  vdState.timerInterval = setInterval(() => {
+    vdState.timeLeft -= 0.1;
+    updateVdTimerBar();
+    
+    if (vdState.timeLeft <= 0) {
+      clearInterval(vdState.timerInterval);
+      handleVdDamage(); // Time's up! Monster hits.
+    }
+  }, 100);
+}
+
+function updateVdTimerBar() {
+  const bar = document.getElementById('vd-timer-bar');
+  if (!bar) return;
+  const pct = Math.max(0, (vdState.timeLeft / 10) * 100);
+  bar.style.width = `${pct}%`;
+  
+  if (pct > 50) bar.style.background = '#10b981';
+  else if (pct > 20) bar.style.background = '#f59e0b';
+  else bar.style.background = '#ef4444';
+}
+
+function handleDungeonAnswer() {
+  if (!vdState.running) return;
+  
+  const input = document.getElementById('vd-input');
+  if (!input) return;
+  
+  const word = vdState.words[vdState.currentFloor];
+  const typed = input.value.trim().toLowerCase();
+  const arr = word.english.split('/').map(s => s.trim().toLowerCase());
+  
+  if (arr.includes(typed)) {
+    // Correct! Player attacks
+    clearInterval(vdState.timerInterval);
+    input.disabled = true;
+    input.style.borderColor = '#10b981';
+    
+    const isCrit = vdState.timeLeft >= 7; // Answered in < 3s
+    showVdFx(isCrit ? 'Chí Mạng!' : 'Băm!', isCrit ? '#f59e0b' : '#fff');
+    
+    // Animate monster death
+    const monster = document.getElementById('vd-monster');
+    if (monster) {
+      monster.style.transform = 'translateY(20px) scale(0.5)';
+      monster.style.opacity = '0';
+    }
+    
+    // Player attack animation
+    const player = document.getElementById('vd-player');
+    if (player) {
+      player.style.transform = 'translateX(20px)';
+      setTimeout(() => player.style.transform = 'translateX(0)', 200);
+    }
+    
+    setTimeout(() => {
+      vdState.currentFloor++;
+      nextVdFloor();
+    }, 1000);
+    
+  } else {
+    // Wrong! Shake input
+    input.style.borderColor = '#ef4444';
+    input.classList.remove('shake');
+    void input.offsetWidth;
+    input.classList.add('shake');
+  }
+}
+
+function handleVdDamage() {
+  clearInterval(vdState.timerInterval);
+  showVdFx('-1 HP', '#ef4444');
+  
+  const player = document.getElementById('vd-player');
+  if (player) {
+    player.style.transform = 'translateX(-20px) skewX(10deg)';
+    setTimeout(() => player.style.transform = 'translateX(0) skewX(0)', 300);
+  }
+  
+  const input = document.getElementById('vd-input');
+  if (input) {
+    input.value = vdState.words[vdState.currentFloor].english; // Show answer
+    input.disabled = true;
+    input.style.borderColor = '#ef4444';
+  }
+  
+  vdState.hp--;
+  renderVdHud();
+  
+  setTimeout(() => {
+    vdState.currentFloor++;
+    nextVdFloor();
+  }, 2000);
+}
+
+function showVdFx(text, color) {
+  const layer = document.getElementById('vd-fx-layer');
+  if (!layer) return;
+  
+  const fx = document.createElement('div');
+  fx.textContent = text;
+  fx.style.position = 'absolute';
+  fx.style.top = '50%';
+  fx.style.left = '50%';
+  fx.style.transform = 'translate(-50%, -50%)';
+  fx.style.color = color;
+  fx.style.fontSize = '40px';
+  fx.style.fontWeight = '900';
+  fx.style.textShadow = '0 4px 10px rgba(0,0,0,0.8)';
+  fx.style.transition = 'all 1s cubic-bezier(0.16, 1, 0.3, 1)';
+  
+  layer.appendChild(fx);
+  
+  setTimeout(() => {
+    fx.style.transform = 'translate(-50%, -100px) scale(1.5)';
+    fx.style.opacity = '0';
+  }, 50);
+  
+  setTimeout(() => fx.remove(), 1000);
+}
+
+function endDungeon(isWin) {
+  vdState.running = false;
+  if (vdState.timerInterval) clearInterval(vdState.timerInterval);
+  
+  const layer = document.getElementById('vd-fx-layer');
+  if (layer) {
+    layer.innerHTML = `
+      <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <div style="font-size: 80px; margin-bottom: 20px;">${isWin ? '🏆' : '💀'}</div>
+        <div style="font-size: 32px; font-weight: 800; color: ${isWin ? '#fbbf24' : '#ef4444'}; margin-bottom: 20px;">
+          ${isWin ? 'CHINH PHỤC HẦM NGỤC!' : 'GAMEOVER'}
+        </div>
+        <p style="color: #f8fafc; font-size: 20px; font-weight: 500; margin-bottom: 30px;">
+          Tầng đạt được: ${vdState.currentFloor}/20
+        </p>
+        <button id="btn-vd-restart" class="btn btn-primary" style="font-size: 18px; padding: 12px 32px;">${isWin ? 'Chơi lại' : 'Thử sức lại'}</button>
+      </div>
+    `;
+    
+    document.getElementById('btn-vd-restart').onclick = () => {
+      layer.innerHTML = '';
+      startDungeon();
+    };
   }
 }
 
@@ -1920,4 +2390,193 @@ function downloadFile(content, filename, type) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ============ Grammar Vault Tab ============
+async function loadGrammarVaultTab() {
+  const data = await chrome.storage.local.get(['tg_grammar_vault']);
+  const vault = data.tg_grammar_vault || [];
+
+  const listEl = document.getElementById('gv-list');
+  const emptyEl = document.getElementById('gv-empty');
+  const countEl = document.getElementById('gv-count-label');
+
+  if (countEl) countEl.textContent = `${vault.length} câu`;
+
+  const addDemoBtn = document.getElementById('btn-gv-add-demo');
+  const clearBtn = document.getElementById('btn-gv-clear');
+  if (addDemoBtn) addDemoBtn.onclick = addGrammarVaultDemo;
+  if (clearBtn) clearBtn.onclick = async () => {
+    if (confirm('Xóa toàn bộ Kho Ngữ Pháp?')) {
+      await chrome.storage.local.set({ tg_grammar_vault: [] });
+      await loadGrammarVaultTab();
+    }
+  };
+
+  if (!listEl) return;
+
+  if (vault.length === 0) {
+    if (emptyEl) emptyEl.style.display = 'block';
+    listEl.innerHTML = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  listEl.innerHTML = vault.map((item, idx) => {
+    const parts = (item.sentence || '').split('___');
+    const blankWidth = Math.max(80, ((item.answer || '').length + 2) * 9);
+    const blankHtml = `<input type="text" id="gv-input-${idx}" autocomplete="off" placeholder="?" style="width:${blankWidth}px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#fff;padding:4px 8px;font-size:15px;text-align:center;">`;
+    const sentenceHtml = parts.map(p => `<span style="color:#e2e8f0;">${escapeHtml(p)}</span>`).join(blankHtml);
+
+    return `
+      <div class="wi-card" style="margin-bottom:12px;">
+        <div style="padding:20px;">
+          <div style="font-size:12px;color:#475569;margin-bottom:10px;display:flex;justify-content:space-between;">
+            <span>📚 ${escapeHtml(item.context || 'Exam')}</span>
+            <span style="color:#334155;cursor:pointer;" onclick="removeGvItem(${idx})">✕</span>
+          </div>
+          <div style="font-size:18px;line-height:2.5;font-family:Georgia,serif;">${sentenceHtml}</div>
+          <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
+            <button class="btn btn-primary" style="font-size:13px;" onclick="checkGvAnswer(${idx},'${encodeURIComponent(item.answer || '')}')">✓ Kiểm tra</button>
+            <span id="gv-feedback-${idx}" style="font-size:13px;"></span>
+          </div>
+          <div style="margin-top:8px;font-size:12px;color:#334155;">Gợi ý: ${Array.from(item.answer || '').map((c, i) => i === 0 ? c : (c === ' ' ? ' ' : '_')).join('')}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+window.checkGvAnswer = function(idx, encodedAnswer) {
+  const correct = decodeURIComponent(encodedAnswer).toLowerCase().trim();
+  const input = document.getElementById(`gv-input-${idx}`);
+  const feedback = document.getElementById(`gv-feedback-${idx}`);
+  if (!input || !feedback) return;
+  const typed = input.value.toLowerCase().trim();
+  const isCorrect = typed === correct || typed.replace(/\s+/g, ' ') === correct.replace(/\s+/g, ' ');
+  if (isCorrect) {
+    feedback.innerHTML = `<span style="color:#10b981">✓ Đúng rồi! "${escapeHtml(decodeURIComponent(encodedAnswer))}"</span>`;
+    input.style.borderColor = '#10b981';
+    if (typeof fireConfetti === 'function') fireConfetti();
+  } else {
+    feedback.innerHTML = `<span style="color:#ef4444">✗ Sai! Đáp án: "${escapeHtml(decodeURIComponent(encodedAnswer))}"</span>`;
+    input.style.borderColor = '#ef4444';
+    input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
+  }
+};
+
+window.removeGvItem = async function(idx) {
+  const data = await chrome.storage.local.get(['tg_grammar_vault']);
+  const vault = data.tg_grammar_vault || [];
+  vault.splice(idx, 1);
+  await chrome.storage.local.set({ tg_grammar_vault: vault });
+  await loadGrammarVaultTab();
+};
+
+async function addGrammarVaultDemo() {
+  const data = await chrome.storage.local.get(['tg_grammar_vault']);
+  const vault = data.tg_grammar_vault || [];
+  const demos = [
+    { sentence: 'She ___ (already, watch) this movie.',   answer: 'has already watched', context: 'Demo - Present Perfect' },
+    { sentence: 'They ___ (not give) me the book yet.',    answer: 'have not given',       context: 'Demo - Present Perfect' },
+    { sentence: 'By the time she arrived, we ___ dinner.', answer: 'had finished',          context: 'Demo - Past Perfect' },
+    { sentence: 'He ___ to Paris three times since 2020.', answer: 'has been',              context: 'Demo - Present Perfect' }
+  ];
+  for (const d of demos) {
+    if (!vault.find(v => v.sentence === d.sentence)) {
+      vault.unshift({ ...d, addedAt: Date.now() });
+    }
+  }
+  await chrome.storage.local.set({ tg_grammar_vault: vault });
+  await loadGrammarVaultTab();
+}
+
+// ============ Skill Matrix Tab ============
+async function loadSkillMatrixTab() {
+  const vocabRes = await sendMessage({ action: 'get_vocab_summaries' });
+  const vocabData = Object.values(vocabRes?.data || {});
+
+  const totalAttempts = vocabData.reduce((a, e) => a + (e.totalAttempts || 0), 0);
+  const totalCorrect  = vocabData.reduce((a, e) => a + (e.correctAttempts || 0), 0);
+  const vocabAccuracy = totalAttempts > 0 ? Math.round(totalCorrect / totalAttempts * 100) : 0;
+  setText('sm-vocab-accuracy', `${vocabAccuracy}%`);
+
+  const errorData = await chrome.storage.local.get(['tg_error_buckets']);
+  const buckets = errorData.tg_error_buckets || { form: 0, meaning: 0, spelling: 0, spacing: 0 };
+  const totalErrors = (buckets.form + buckets.meaning + buckets.spelling + buckets.spacing) || 1;
+  const formPct    = Math.round(buckets.form    / totalErrors * 100);
+  const meaningPct = Math.round(buckets.meaning / totalErrors * 100);
+  setText('sm-exam-form-err',    `${formPct}%`);
+  setText('sm-exam-meaning-err', `${meaningPct}%`);
+
+  let topWeakness = 'Chưa đủ dữ liệu';
+  if (formPct > meaningPct && formPct > 20)      topWeakness = 'Chia dạng từ';
+  else if (meaningPct > formPct && meaningPct > 20) topWeakness = 'Hiểu ý nghĩa';
+  else if (vocabAccuracy < 70)                    topWeakness = 'Từ vựng cơ bản';
+  setText('sm-top-weakness', topWeakness);
+
+  // AI Conclusion
+  const conclusionEl = document.getElementById('sm-ai-conclusion');
+  if (conclusionEl) {
+    const lines = [];
+    if (totalAttempts < 10) {
+      lines.push('📊 Chưa có đủ dữ liệu để phân tích. Hãy cài đặt và làm bài tập trên ThayGiap để extension thu thập thông tin.');
+    } else {
+      if (vocabAccuracy >= 80) lines.push(`✅ <strong>Từ vựng:</strong> Xuất sắc! Bạn đúng <strong>${vocabAccuracy}%</strong> lần nhập từ vựng.`);
+      else if (vocabAccuracy >= 60) lines.push(`⚠️ <strong>Từ vựng:</strong> Trung bình — ${vocabAccuracy}% đúng. Nên ôn lại qua tab "Lỗi nhập".`);
+      else lines.push(`❌ <strong>Từ vựng:</strong> Cần cải thiện — chỉ đúng ${vocabAccuracy}%. Hãy dùng Vocab Dungeon để luyện.`);
+
+      if (formPct > 30)    lines.push(`🔴 <strong>Lỗi nổi bật:</strong> ${formPct}% lỗi do CHIA DẠNG TỪ. Bạn thường hiểu nghĩa nhưng điền sai dạng từ (ví dụ: dùng quy tắc cho động từ bất quy tắc).`);
+      if (meaningPct > 30) lines.push(`🟡 <strong>Lỗi nổi bật:</strong> ${meaningPct}% lỗi do SAI Ý NGHĨA — có thể nhầm từ hoặc không hiểu nội dung câu hỏi.`);
+    }
+    conclusionEl.innerHTML = lines.join('<br><br>') || 'Dữ liệu đang được phân tích...';
+  }
+
+  // CTA Buttons
+  const ctaEl = document.getElementById('sm-cta-buttons');
+  if (ctaEl) {
+    ctaEl.innerHTML = '';
+    const addBtn = (label, hash, cls = 'btn-secondary') => {
+      const btn = document.createElement('button');
+      btn.className = `btn ${cls}`;
+      btn.textContent = label;
+      btn.onclick = () => { location.hash = hash; };
+      ctaEl.appendChild(btn);
+    };
+    if (formPct > 20) addBtn('⚔️ Luyện động từ bất quy tắc', 'offline', 'btn-primary');
+    if (vocabAccuracy < 75) addBtn('🔁 Ôn tập từ vựng sai', 'wrong-inputs');
+    addBtn('🧩 Kho Ngữ Pháp', 'grammar-vault');
+    addBtn('✍️ Lò rèn Câu', 'sentence-forge');
+  }
+
+  // Top 5 hardest words
+  const topWordsEl = document.getElementById('sm-top-words');
+  if (topWordsEl) {
+    const hardest = vocabData
+      .filter(e => (e.wrongAttempts || 0) > 0)
+      .sort((a, b) => (b.wrongAttempts || 0) - (a.wrongAttempts || 0))
+      .slice(0, 5);
+
+    if (hardest.length === 0) {
+      topWordsEl.innerHTML = '<p style="color:#475569;">Chưa có dữ liệu lỗi.</p>';
+    } else {
+      topWordsEl.innerHTML = hardest.map((e, i) => {
+        const wrongPct = e.totalAttempts > 0 ? Math.round(e.wrongAttempts / e.totalAttempts * 100) : 0;
+        const barColor = wrongPct > 60 ? '#ef4444' : wrongPct > 30 ? '#f59e0b' : '#10b981';
+        const viEnc = encodeURIComponent(e.vietnamese || '');
+        const enEnc = encodeURIComponent(e.english || '?');
+        return `
+          <div style="background:rgba(30,41,59,0.6);border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:16px;border:1px solid rgba(148,163,184,0.1);">
+            <div style="font-size:24px;font-weight:800;color:#334155;width:28px;">${i + 1}</div>
+            <div style="flex:1;">
+              <div style="font-weight:700;color:#f8fafc;font-size:15px;">${escapeHtml(e.vietnamese || '')} → <span style="color:#38bdf8">${escapeHtml(e.english || '?')}</span></div>
+              <div style="margin-top:6px;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;">
+                <div style="height:100%;width:${wrongPct}%;background:${barColor};border-radius:3px;"></div>
+              </div>
+              <div style="margin-top:4px;font-size:12px;color:#64748b;">${e.wrongAttempts} lần sai / ${e.totalAttempts} lần tổng (${wrongPct}% sai)</div>
+            </div>
+            <button class="btn btn-secondary" style="font-size:12px;white-space:nowrap;" onclick="generateMnemonic('${viEnc}','${enEnc}',this)">💡 Mẹo</button>
+          </div>`;
+      }).join('');
+    }
+  }
 }

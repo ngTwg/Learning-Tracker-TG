@@ -1,0 +1,136 @@
+/* Social Media Toll-booth Ext */
+#tg-social-blocker-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.98);
+  z-index: 2147483647; /* Maximum z-index */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  color: #f8fafc;
+  backdrop-filter: blur(10px);
+}
+
+.tg-blocker-card {
+  background: #1e293b;
+  border-radius: 16px;
+  padding: 40px;
+  width: 90%;
+  max-width: 500px;
+  text-align: center;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  border: 1px solid #334155;
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tg-blocker-header {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #38bdf8;
+}
+
+.tg-blocker-subtitle {
+  font-size: 15px;
+  color: #94a3b8;
+  margin-bottom: 30px;
+}
+
+.tg-vocab-card {
+  background: #0f172a;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.tg-vocab-prompt {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #f8fafc;
+}
+
+.tg-vocab-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 18px;
+  border-radius: 8px;
+  border: 2px solid #334155;
+  background: #1e293b;
+  color: #fff;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.tg-vocab-input:focus {
+  border-color: #38bdf8;
+}
+
+.tg-vocab-input.tg-wrong {
+  border-color: #ef4444;
+  animation: shake 0.4s ease-in-out;
+}
+
+.tg-vocab-input.tg-correct {
+  border-color: #10b981;
+}
+
+.tg-vocab-submit {
+  background: #38bdf8;
+  color: #0f172a;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.2s;
+  margin-top: 16px;
+}
+
+.tg-vocab-submit:hover {
+  background: #0ea5e9;
+  transform: translateY(-2px);
+}
+
+.tg-vocab-progress {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.tg-progress-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #334155;
+}
+
+.tg-progress-dot.active {
+  background: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+}
+
+.tg-progress-dot.done {
+  background: #10b981;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
