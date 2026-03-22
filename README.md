@@ -1,4 +1,4 @@
-# 📚 ThayGiap Learning Ecosystem (v1.3.0)
+# 📚 ThayGiap Learning Ecosystem (v1.4.0)
 
 > Extension toàn diện hỗ trợ học tập, theo dõi tiến độ, phân tích dữ liệu và "game hóa" quá trình học trên hệ thống **Thầy Giáp ENGLISH** (thaygiap.com).
 
@@ -21,9 +21,9 @@ Không chỉ là một tracker thông thường, ThayGiap Learning Ecosystem đe
 - **Cách thiết lập (Trong phần `Cài đặt` của bảng điều khiển chính)**:
   - **Thêm trang web tùy chọn**: Nhập tên miền (domain) của bất kỳ trang web nào (VD: `facebook.com`, `youtube.com`, `tiktok.com`, `netflix.com`...) vào ô Text và bấm **"Thêm"**.
   - **Xóa trang web**: Bấm nút `×` bên cạnh tên miền trong danh sách để hủy áp dụng Toll-booth cho trang đó.
-  - **Số từ kiểm tra**: Chọn mức độ khó bằng cách chọn sẽ bị hỏi `3 từ`, `5 từ`, `7 từ`, hoặc `10 từ` mỗi lần chặn.
-  - **Thời gian xem tự do**: Cấu hình thời gian bạn được sử dụng mạng xã hội trước khi bị hỏi bài (`5 phút`, `10 phút`, `15 phút`, `20 phút`, `30 phút`).
-  - **Bỏ qua (Skip)**: Bạn có thể bật tùy chọn cho phép hiện nút "Bỏ qua" (Nếu bấm bỏ qua sẽ chỉ được thêm 1 phút tự do ngắn hạn).
+  - **Số từ kiểm tra**: Chọn mức độ khó bằng cách chọn sẽ bị hỏi `3`, `5`, `7`, hoặc `10 từ` mỗi lần chặn.
+  - **Thời gian xem tự do**: Cấu hình thời gian được sử dụng mạng xã hội trước khi bị hỏi bài (`5 phút`, `10 phút`, `15 phút`, `20 phút`, `30 phút`).
+  - **Bỏ qua (Skip)**: Có thể bật tùy chọn cho phép hiện nút "Bỏ qua" (Nếu bấm bỏ qua sẽ chỉ được thêm 1 phút tự do ngắn hạn).
   - Bấm **Lưu Settings** để áp dụng và có thể thử nghiệm ngay bằng nút **"Thử Toll-booth ngay"**.
 
 ### 3. 🐉 Gamification (Thú ảo & HUD Tương Tác)
@@ -43,14 +43,24 @@ Không chỉ là một tracker thông thường, ThayGiap Learning Ecosystem đe
 
 ### 6. 🧠 Tính Năng AI (Tích hợp Trí Tuệ Nhân Tạo)
 
-- Phân tích điểm yếu và gợi ý dựa trên lỗi sai của bạn. AI cho lời khuyên thực tế (AI Conclusion).
+- **Phân tích điểm yếu**: Gợi ý dựa trên lỗi sai của bạn. AI cho lời khuyên thực tế (AI Conclusion).
 - **Lò rèn câu (Sentence Forge)**: Công cụ cho phép tự viết câu Tiếng Anh và nhờ AI dùng API chấm điểm chỉ ra lỗi sai.
-- **Cách thiết lập**: Vào Settings -> Tìm mục **API Trí Tuệ Nhân Tạo**. Chọn **Gemini (Khuyên dùng - Miễn phí)** hoặc **OpenAI**. Nhập `API Key` của bạn vào ô trống và Lưu. Mọi tính năng AI lập tức sẽ được kích hoạt.
+- **Quản lý hạn mức (Daily Usage)**: Tích hợp thanh theo dõi tiến độ sử dụng AI trong ngày (Giới hạn Requests và Tokens) để đảm bảo không vượt quá quota miễn phí của provider.
+- **Cách thiết lập**: Vào Settings -> Mục **API Trí Tuệ Nhân Tạo**. Chọn **Gemini (Khuyên dùng)** hoặc **OpenAI**. Nhập `API Key` và Lưu.
 
-### 7. 🎯 Grammar Vault & Weakness Map (Khắc phục Điểm Yếu)
+### 7. 🎯 Grammar Vault - Kho Ngữ Pháp & AI Quiz
 
-- **Tính năng**: Khác với từ vựng, nếu bạn gõ sai 1 cẩu trúc ngữ pháp, extension sẽ quét bối cảnh trang và lưu vào "Kho ngữ pháp" (Grammar Vault). Bản đồ điểm yếu (Weakness map) vẽ lại tỉ lệ loại lỗi của bạn (Sai chính tả, dư khoảng trắng, hay sai cấu trúc).
-- **Cách dùng**: Mở Bảng điều khiển lớn -> Tab "Kho Ngữ Pháp" và Tab "Overview" / "Phân tích điểm yếu". Click vào nút "Luyện tập lại" để bắt đầu khắc phục.
+- **Tính năng**: Lưu trữ các câu làm sai ngữ pháp trên hệ thống.
+- **🤖 AI Grammar Quiz (Nâng cấp)**: Chế độ tự động tạo bài tập từ AI dựa trên các thì tiếng Anh em chọn.
+  - **Tùy biến cao**: Lựa chọn cụ thể trong 12 thì (Tương lai hoàn thành tiếp diễn, Quá khứ đơn, ...), hoặc "Lộn xộn" để tăng thử thách.
+  - **Fill-in-the-blanks**: AI tự động tạo câu có verb trong ngoặc `(V_infinitive)` để bạn điền vào.
+  - **Badge Tên Thì**: Mỗi thẻ câu hỏi hiển thị rõ tên thì (ví dụ: `📚 Thì Tương lai Đơn`) để người học dễ nhận diện.
+  - **Phản hồi chi tiết**: Khi kiểm tra đáp án, AI sẽ hiển thị:
+    - ✅ Lời giải chính xác với màu nổi bật.
+    - 🇻🇳 Nghĩa của câu bằng tiếng Việt.
+    - 🔍 Dấu hiệu nhận biết thông minh (Signal words) của thì đó.
+    - 💡 "Khắc sâu": Giải thích vì sao phải dùng cấu trúc đó trong ngữ cảnh này.
+- **Cách dùng**: Mở Bảng điều khiển lớn -> Tab "Kho Ngữ Pháp".
 
 ### 8. 🎮 Vocab Dungeon RPG (Trò Chơi Ôn Tập)
 
@@ -65,7 +75,7 @@ Không chỉ là một tracker thông thường, ThayGiap Learning Ecosystem đe
 ### 10. 📊 Quản Lý Data & Export Ra Anki
 
 - Mọi data lưu `100% Offline Local` (Bảo vệ tính riêng tư).
-- Trích xuất: Tại Tab Settings, bạn có thể **Export JSON** (Để sao lưu/mang sang máy khác) hoặc **Xuất Anki CSV**. Trích xuất thẻ từ vựng Anki cho phép bạn đồng bộ dữ liệu những từ bạn vừa làm sai trên máy tính sang điện thoại dễ dàng! Nhập file CSV vào Deck Anki Desktop.
+- Trích xuất: Tại Tab Settings, bạn có thể **Export JSON** hoặc **Xuất Anki CSV**. Trích xuất thẻ từ vựng Anki cho phép đồng bộ dữ liệu những từ bạn vừa làm sai trên máy tính sang điện thoại dễ dàng! Nhập file CSV vào Deck Anki Desktop.
 
 ---
 
@@ -74,7 +84,7 @@ Không chỉ là một tracker thông thường, ThayGiap Learning Ecosystem đe
 ```text
 ThayGiap/
 ├── manifest.json          # File cấu hình Mv3 + Khai báo Host Permissions (all_urls)
-├── background.js          # Service Worker: Xử lý State tổng, DB, Chrome Alarms
+├── background.js          # Service Worker: Xử lý State tổng, AI API calling, Token tracking
 ├── content.js             # Content Script: Đoán DOM bài tập thaygiap.com, Signal Word, HUD, Mascot
 ├── content.css            # Stylesheet DOM Injected, Anim Mascot
 ├── tanglish.js            # Content Script: Parse DOM các trang báo, thay thế regex
@@ -82,7 +92,7 @@ ThayGiap/
 ├── popup/                 # Tùy chỉnh nhanh (Giao diện Icon Toolbar)
 ├── options/               # Menu Dashboard SPA chính (Cài đặt, Matrix, Dungeon, Kéo thả List)
 ├── newtab/                # Màn hình Tab mới Flashcard HTML (SM-2 Algorithm)
-└── utils/                 # Các Module nhỏ: Storage IndexDB, Regex Tools, Export Handlers
+└── utils/                 # Các Module nhỏ: Storage, Regex Tools, Export Handlers
 ```
 
 ### Kiến Trúc Lắng Nghe DOM (Angular)
@@ -98,4 +108,4 @@ Hệ thống của thaygiap.com dùng Client Router (không reset trang). Extens
 - **Telegram**: @AstroMindquiz
 - **Gmail**: <lengoctuong2005@gmail.com>
 - **Facebook**: <https://www.facebook.com/ngtu.ong14.11>
-- **Copyright**: ©Lê Ngọc tường_HCMUS_23DTV
+- **Copyright**: ©Lê Ngọc Tường_HCMUS_23DTV

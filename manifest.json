@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ThayGiap Learning Tracker",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "author": "Lê Ngọc Tường _HCMUS_DTV",
   "description": "Theo dõi quá trình học và làm bài trên hệ thống Thầy Giáp ENGLISH. Ghi nhận từ vựng đúng/sai, số lần sai, điểm kiểm tra, lịch sử luyện tập.",
   "permissions": [

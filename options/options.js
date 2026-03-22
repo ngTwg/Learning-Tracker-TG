@@ -106,17 +106,14 @@ async function applyInitialRoute() {
     return;
   }
 
-  if (hash === 'offline') {
-    activateTabById('offline');
-    return;
-  }
+
 
   if (hash === 'sessions') {
     activateTabById('sessions');
     return;
   }
 
-  const knownTabs = ['overview', 'vocab', 'wrong-inputs', 'review', 'goals', 'weakness', 'offline', 'sessions', 'history', 'settings', 'sentence-forge', 'vocab-dungeon'];
+  const knownTabs = ['overview', 'vocab', 'wrong-inputs', 'review', 'goals', 'weakness', 'sessions', 'history', 'settings', 'sentence-forge', 'vocab-dungeon', 'grammar-vault', 'skill-matrix'];
   if (knownTabs.includes(hash)) {
     activateTabById(hash);
   }
@@ -1773,6 +1770,7 @@ async function loadSettingsTab() {
   const aiKeyInput = document.getElementById('setting-ai-key');
   if (aiProviderSelect) aiProviderSelect.value = settings.aiProvider || 'none';
   if (aiKeyInput) aiKeyInput.value = settings.aiKey || '';
+  clearAiTestStatus();
   updateAiHelpText();
 
   // Data stats
@@ -1840,20 +1838,69 @@ function setupSettingsActions() {
         action: 'update_settings',
         settings: { aiProvider: provider }
       });
+      clearAiTestStatus();
       updateAiHelpText();
     });
   }
 
   const btnSaveAiKey = document.getElementById('btn-save-ai-key');
+  const btnTestAiKey = document.getElementById('btn-test-ai-key');
   const aiKeyInput = document.getElementById('setting-ai-key');
   if (btnSaveAiKey && aiKeyInput) {
-    btnSaveAiKey.addEventListener('click', () => {
-      sendMessage({
+    btnSaveAiKey.addEventListener('click', async () => {
+      await sendMessage({
         action: 'update_settings',
         settings: { aiKey: aiKeyInput.value.trim() }
       });
       btnSaveAiKey.textContent = 'Đã lưu ✓';
       setTimeout(() => btnSaveAiKey.textContent = 'Lưu Key', 2000);
+    });
+  }
+
+  if (btnTestAiKey && aiKeyInput && aiProviderSelect) {
+    btnTestAiKey.addEventListener('click', async () => {
+      const provider = aiProviderSelect.value || 'none';
+      const apiKey = aiKeyInput.value.trim();
+
+      if (provider === 'none') {
+        setAiTestStatus('Hãy chọn nhà cung cấp AI trước khi kiểm tra.', 'warning');
+        return;
+      }
+
+      if (!apiKey) {
+        setAiTestStatus('Hãy nhập API Key trước khi kiểm tra.', 'warning');
+        return;
+      }
+
+      btnTestAiKey.disabled = true;
+      const originalLabel = btnTestAiKey.textContent;
+      btnTestAiKey.textContent = 'Đang kiểm tra...';
+      setAiTestStatus('Đang kiểm tra kết nối tới dịch vụ AI...', 'info');
+
+      try {
+        const res = await sendMessage({
+          action: 'test_ai_connection',
+          provider,
+          apiKey
+        });
+
+        if (res?.ok && res?.data?.message) {
+          setAiTestStatus(`${res.data.message} Nếu đây là key mới, nhớ bấm "Lưu Key".`, 'success');
+        } else {
+          setAiTestStatus(res?.error || 'Không thể kiểm tra API AI lúc này.', 'error');
+        }
+      } catch (err) {
+        setAiTestStatus(err?.message || 'Không thể kiểm tra API AI lúc này.', 'error');
+      } finally {
+        btnTestAiKey.disabled = false;
+        btnTestAiKey.textContent = originalLabel;
+      }
+    });
+  }
+
+  if (aiKeyInput) {
+    aiKeyInput.addEventListener('input', () => {
+      clearAiTestStatus();
     });
   }
 
@@ -2095,6 +2142,7 @@ function updateAiHelpText() {
 
   if (provider === 'none') {
     if (container) container.style.display = 'none';
+    clearAiTestStatus();
     return;
   }
 
@@ -2123,6 +2171,48 @@ function updateAiHelpText() {
     4. Copy đoạn mã bắt đầu bằng <code>sk-or-...</code> và dán vào ô bên trên.<br>
     <em>Lưu ý: Bạn có thể chọn model ở cấu hình nâng cao, mặc định sẽ dùng dòng Claude Haiku hoặc Gemini Flash cực nhanh miễn phí.</em>`;
   }
+}
+
+function clearAiTestStatus() {
+  const statusEl = document.getElementById('ai-test-status');
+  if (!statusEl) return;
+  statusEl.style.display = 'none';
+  statusEl.textContent = '';
+}
+
+function setAiTestStatus(message, tone = 'info') {
+  const statusEl = document.getElementById('ai-test-status');
+  if (!statusEl) return;
+
+  const tones = {
+    info: {
+      color: 'var(--text-secondary)',
+      border: '1px solid rgba(148, 163, 184, 0.35)',
+      background: 'rgba(148, 163, 184, 0.08)'
+    },
+    success: {
+      color: '#bbf7d0',
+      border: '1px solid rgba(34, 197, 94, 0.4)',
+      background: 'rgba(34, 197, 94, 0.12)'
+    },
+    warning: {
+      color: '#fde68a',
+      border: '1px solid rgba(245, 158, 11, 0.35)',
+      background: 'rgba(245, 158, 11, 0.12)'
+    },
+    error: {
+      color: '#fecaca',
+      border: '1px solid rgba(239, 68, 68, 0.4)',
+      background: 'rgba(239, 68, 68, 0.12)'
+    }
+  };
+
+  const palette = tones[tone] || tones.info;
+  statusEl.style.display = 'block';
+  statusEl.style.color = palette.color;
+  statusEl.style.border = palette.border;
+  statusEl.style.background = palette.background;
+  statusEl.textContent = message;
 }
 
 // ============ Sentence Forge Tab ============
@@ -2169,7 +2259,7 @@ async function loadSentenceForgeTab() {
       const res = await sendMessage({
         action: 'ask_ai',
         aiType: 'grammar',
-        wordOrContext: `Học sinh được yêu cầu viết câu dùng các từ: ${sentenceForgeWords.map(w => w.english).join(', ')}. Học sinh đã viết: "${text}". Hãy nhận xét xem học sinh viết đúng ngữ pháp không, dùng từ có tự nhiên không, và sửa lại câu cho hay hơn (nếu có lỗi).`
+        wordOrContext: `Tình huống: Học sinh được yêu cầu viết câu dùng các từ vựng: ${sentenceForgeWords.map(w => w.english).join(', ')}.\nHọc sinh viết: "${text}".\n\nYêu cầu dành cho AI:\n1. Nhận xét siêu ngắn gọn, sử dụng ngôn từ cực kỳ dễ hiểu (tránh hoàn toàn thuật ngữ chuyên ngành khó).\n2. Trình bày bằng dấu gạch đầu dòng rõ ràng để dễ nhìn.\n3. Nếu học sinh sai: Chỉ ra lỗi sai ở đâu và đưa ra câu sửa lại cho đúng, tự nhiên và hay hơn.`
       });
 
       btnSubmit.disabled = false;
@@ -2177,7 +2267,15 @@ async function loadSentenceForgeTab() {
       if (sfResult) {
         sfResult.style.display = 'block';
         if (res && res.result) {
-          sfResult.innerHTML = `<strong>Nhận xét từ AI:</strong><br><br>` + escapeHtml(res.result).replace(/\\n/g, '<br/>');
+          let html = escapeHtml(res.result);
+          // Parse basic markdown
+          html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+          html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+          html = html.replace(/\n\s*-\s/g, '<br/>• ');
+          html = html.replace(/\n\s*\*\s/g, '<br/>• ');
+          html = html.replace(/\n/g, '<br/>');
+          html = html.replace(/\\n/g, '<br/>'); // Fallback for escaped newline
+          sfResult.innerHTML = `<strong>Nhận xét từ AI:</strong><br><br>` + html;
         } else {
           sfResult.innerHTML = `<span style="color:var(--accent-red)">Lỗi khi gọi AI. Hãy kiểm tra lại API Key ở phần Cài đặt.</span>`;
         }
@@ -2816,4 +2914,411 @@ document.addEventListener('click', (e) => {
       }
       break;
   }
+});
+
+// ============ Kho Ngữ Pháp (Grammar Vault) Logic ============
+document.addEventListener('DOMContentLoaded', () => {
+  const tensesHTML = `
+    <h3 style="margin-bottom:15px; color:var(--text-primary);">📚 Nhắc lại 12 Thì Cơ Bản</h3>
+    <div style="overflow-x:auto;">
+      <table style="width:100%; text-align:left; border-collapse:collapse; background:rgba(255,255,255,0.05); border-radius:8px; overflow:hidden;">
+        <tr style="border-bottom: 2px solid var(--border-color); background:rgba(0,0,0,0.2);">
+          <th style="padding:12px; color:var(--text-primary);">Thì</th>
+          <th style="padding:12px; color:var(--text-primary);">Cấu trúc cơ bản</th>
+          <th style="padding:12px; color:var(--text-primary);">Cách dùng chính</th>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding:12px; color:var(--accent-blue); font-weight:bold;">Hiện tại đơn</td><td style="padding:12px;">S + V(s/es)</td><td style="padding:12px;">Sự thật hiển nhiên, thói quen lặp lại.</td></tr>
+        <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding:12px; color:var(--accent-green); font-weight:bold;">Hiện tại tiếp diễn</td><td style="padding:12px;">S + am/is/are + V-ing</td><td style="padding:12px;">Sự việc ĐANG xảy ra tại thời điểm nói.</td></tr>
+        <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding:12px; color:var(--accent-purple); font-weight:bold;">Hiện tại hoàn thành</td><td style="padding:12px;">S + have/has + V3/ed</td><td style="padding:12px;">Sự việc bắt đầu trong QK, kéo dài đến HT, kết quả ở HT.</td></tr>
+        <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding:12px; color:var(--accent-orange); font-weight:bold;">Hiện tại hoàn thành tiếp diễn</td><td style="padding:12px;">S + have/has + been + V-ing</td><td style="padding:12px;">Giống HTHT nhưng nhấn mạnh quá trình liên tục.</td></tr>
+        
+        <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding:12px; color:var(--accent-blue); font-weight:bold;">Quá khứ đơn</td><td style="padding:12px;">S + V2/ed</td><td style="padding:12px;">Sự việc đã xảy ra và KẾT THÚC hoàn toàn trong QK.</td></tr>
+        <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding:12px; color:var(--accent-green); font-weight:bold;">Quá khứ tiếp diễn</td><td style="padding:12px;">S + was/were + V-ing</td><td style="padding:12px;">Đang xảy ra tại 1 thời điểm xác định trong QK.</td></tr>
+        <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding:12px; color:var(--accent-purple); font-weight:bold;">Quá khứ hoàn thành</td><td style="padding:12px;">S + had + V3/ed</td><td style="padding:12px;">Xảy ra TRƯỚC 1 thời điểm/hành động khác trong QK.</td></tr>
+        <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding:12px; color:var(--accent-orange); font-weight:bold;">Quá khứ hoàn thành tiếp diễn</td><td style="padding:12px;">S + had + been + V-ing</td><td style="padding:12px;">Nhấn mạnh tính liên tục của hành động xảy ra trước 1 HĐ khác trong QK.</td></tr>
+
+        <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding:12px; color:var(--accent-blue); font-weight:bold;">Tương lai đơn</td><td style="padding:12px;">S + will + V</td><td style="padding:12px;">Dự đoán, quyết định tức thời lúc nói, lời hứa.</td></tr>
+        <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding:12px; color:var(--accent-green); font-weight:bold;">Tương lai tiếp diễn</td><td style="padding:12px;">S + will be + V-ing</td><td style="padding:12px;">Đang xảy ra tại 1 thời điểm xác định trong TL.</td></tr>
+        <tr style="border-bottom: 1px solid var(--border-color);"><td style="padding:12px; color:var(--accent-purple); font-weight:bold;">Tương lai hoàn thành</td><td style="padding:12px;">S + will have + V3/ed</td><td style="padding:12px;">Hoàn thành TRƯỚC 1 thời điểm hoặc HĐ khác ở TL.</td></tr>
+        <tr><td style="padding:12px; color:var(--accent-orange); font-weight:bold;">Tương lai hoàn thành tiếp diễn</td><td style="padding:12px;">S + will have + been + V-ing</td><td style="padding:12px;">Nhấn mạnh tính liên tục của 1 sự việc đến 1 thời điểm trong TL.</td></tr>
+      </table>
+    </div>
+  `;
+
+  const signsHTML = `
+    <h3 style="margin-bottom:15px; color:var(--text-primary);">🔍 Các Dấu Hiệu Nhận Biết Thì</h3>
+    <ul style="line-height:2.2; color:var(--text-secondary); font-size:15px;">
+      <li><strong style="color:var(--accent-blue);">Hiện tại đơn:</strong> always, usually, often, everyday, sometimes, never...</li>
+      <li><strong style="color:var(--accent-green);">Hiện tại tiếp diễn:</strong> now, right now, at the moment, look!, listen!...</li>
+      <li><strong style="color:var(--accent-purple);">Hiện tại hoàn thành:</strong> since, for, already, just, yet, recently, up to now...</li>
+      <li><strong style="color:var(--accent-blue);">Quá khứ đơn:</strong> yesterday, last (week/month), ago, in + năm QK...</li>
+      <li><strong style="color:var(--accent-green);">Quá khứ tiếp diễn:</strong> at + giờ + thời gian QK, at this time + thời gian QK, when/while...</li>
+      <li><strong style="color:var(--accent-purple);">Quá khứ hoàn thành:</strong> before, after, by the time, as soon as + HĐ quá khứ...</li>
+      <li><strong style="color:var(--accent-blue);">Tương lai đơn:</strong> tomorrow, next (week/month), in + thời gian, I think, probably...</li>
+      <li><strong style="color:var(--accent-green);">Tương lai gần:</strong> look at those clouds, be going to...</li>
+      <li><strong style="color:var(--accent-purple);">Tương lai tiếp diễn:</strong> at this time tomorrow, at 8 PM tomorrow...</li>
+      <li><strong style="color:var(--accent-blue);">Tương lai hoàn thành:</strong> by the end of, by next, by tomorrow...</li>
+      <li><strong style="color:var(--accent-orange);">Tương lai hoàn thành tiếp diễn:</strong> by the end of + thời gian + for + lượng thời gian (VD: by next year, I will have been living here for 2 years)</li>
+    </ul>
+  `;
+
+  const practiceHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+      <h3 style="margin:0; color:var(--text-primary);">⚔️ Ôn tập Thì & Dấu hiệu</h3>
+      <button id="btn-gv-refresh-practice" class="btn btn-secondary" style="padding:6px 12px; font-size:13px;">Làm mới</button>
+    </div>
+    <div id="gv-practice-list" style="display:flex; flex-direction:column; gap:12px;"></div>
+  `;
+
+  const aiGenHTML = `
+    <h3 style="margin-bottom:15px; color:var(--text-primary);">✨ Tự động tạo câu bằng AI</h3>
+    <div style="margin-top:10px;">
+      <p style="color:var(--text-secondary); margin-bottom:12px;">Chọn các tùy chọn bên dưới để AI tự động tạo ra mẫu câu riêng kèm nhắc lại cấu trúc:</p>
+      
+      <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+        <select id="gv-ai-tense" class="select-input" style="flex:1; min-width:150px; padding:10px; border-radius:8px;">
+          <option value="Thì ngẫu nhiên">Lộn xộn (Thì ngẫu nhiên)</option>
+          <option value="Hiện tại đơn">Hiện tại đơn</option>
+          <option value="Hiện tại tiếp diễn">Hiện tại tiếp diễn</option>
+          <option value="Hiện tại hoàn thành">Hiện tại hoàn thành</option>
+          <option value="Quá khứ đơn">Quá khứ đơn</option>
+          <option value="Quá khứ tiếp diễn">Quá khứ tiếp diễn</option>
+          <option value="Quá khứ hoàn thành">Quá khứ hoàn thành</option>
+          <option value="Tương lai đơn">Tương lai đơn</option>
+          <option value="Tương lai gần">Tương lai gần</option>
+          <option value="Tương lai tiếp diễn">Tương lai tiếp diễn</option>
+          <option value="Tương lai hoàn thành">Tương lai hoàn thành</option>
+          <option value="Tương lai hoàn thành tiếp diễn">Tương lai hoàn thành tiếp diễn</option>
+        </select>
+        <select id="gv-ai-irregular" class="select-input" style="flex:1; min-width:150px; padding:10px; border-radius:8px;">
+          <option value="Động từ bất kỳ">Động từ bất kỳ</option>
+          <option value="Bắt buộc có Động từ Bất quy tắc">Bắt buộc có Động từ Bất quy tắc</option>
+          <option value="Chỉ dùng Động từ Có quy tắc">Chỉ dùng Động từ Có quy tắc</option>
+        </select>
+        <select id="gv-ai-amount" class="select-input" style="min-width:100px; padding:10px; border-radius:8px;">
+          <option value="1">1 câu</option>
+          <option value="3">3 câu</option>
+          <option value="5">5 câu</option>
+          <option value="10">10 câu</option>
+          <option value="20">20 câu</option>
+        </select>
+      </div>
+
+      <div style="display:flex; gap:10px;">
+        <input type="text" id="gv-ai-input" placeholder="Từ vựng cần chứa (tùy chọn)" class="search-input" style="flex:2; padding:10px 14px; border-radius:8px;">
+        <button id="gv-btn-ai-submit" class="btn btn-primary" style="padding:10px 20px; flex:1;">Tạo câu tự động</button>
+      </div>
+
+      <div id="gv-ai-usage-bar" style="margin-top:14px; padding:10px 14px; background:var(--bg-card); border-radius:10px; border:1px solid var(--border-color); font-size:13px; display:flex; flex-wrap:wrap; align-items:center; gap:12px;">
+        <span style="font-weight:600; color:var(--text-secondary);">📊 Hôm nay:</span>
+        <span id="gv-usage-requests" style="color:var(--accent-blue);">Yêu cầu: 0/20</span>
+        <span style="color:var(--border-color);">|</span>
+        <span id="gv-usage-tokens" style="color:var(--accent-purple);">Token: 0 / 250,000</span>
+        <div id="gv-usage-progress" style="flex:1; min-width:100px; height:6px; background:var(--bg-secondary); border-radius:3px; overflow:hidden;">
+          <div id="gv-usage-bar-fill" style="height:100%; width:0%; background:var(--gradient-primary); border-radius:3px; transition:width 0.4s ease;"></div>
+        </div>
+        <button id="gv-btn-reset-usage" style="background:none; border:none; cursor:pointer; font-size:11px; color:var(--text-muted); padding:2px 6px; border-radius:4px; transition:all 0.2s;" title="Reset về 0">↺ Reset</button>
+      </div>
+
+      <div id="gv-ai-result" style="margin-top:14px; padding:18px; background:var(--bg-secondary); border-radius:12px; display:none; color:var(--text-primary); line-height:1.6; border-left:4px solid var(--accent-purple); box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-size:15px;"></div>
+    </div>
+  `;
+
+  // Gemini free tier limits
+  const AI_DAILY_RPD = 20;
+  const AI_DAILY_TPD = 250000;
+
+  function updateUsageBar(usage) {
+    const reqEl = document.getElementById('gv-usage-requests');
+    const tokEl = document.getElementById('gv-usage-tokens');
+    const barFill = document.getElementById('gv-usage-bar-fill');
+    if (!reqEl || !tokEl || !barFill) return;
+    const reqs = usage.requests || 0;
+    const toks = usage.tokensTotal || 0;
+    const reqPct = Math.min(100, Math.round(reqs / AI_DAILY_RPD * 100));
+    const tokPct = Math.min(100, Math.round(toks / AI_DAILY_TPD * 100));
+    const pct = Math.max(reqPct, tokPct);
+    const reqColor = reqs >= AI_DAILY_RPD ? 'var(--accent-red)' : reqs >= 15 ? 'var(--accent-orange)' : 'var(--accent-blue)';
+    const tokColor = toks >= AI_DAILY_TPD * 0.9 ? 'var(--accent-red)' : toks >= AI_DAILY_TPD * 0.7 ? 'var(--accent-orange)' : 'var(--accent-purple)';
+    reqEl.style.color = reqColor;
+    tokEl.style.color = tokColor;
+    reqEl.textContent = `Yêu cầu: ${reqs}/${AI_DAILY_RPD}`;
+    tokEl.textContent = `Token: ${toks.toLocaleString()} / ${AI_DAILY_TPD.toLocaleString()}`;
+    barFill.style.width = pct + '%';
+    barFill.style.background = pct >= 90 ? 'linear-gradient(90deg,var(--accent-orange),var(--accent-red))' : 'var(--gradient-primary)';
+  }
+
+  function loadAndShowUsage() {
+    chrome.runtime.sendMessage({ action: 'get_ai_usage' }, res => {
+      if (res && res.ok) updateUsageBar(res.data);
+    });
+  }
+
+  // Wire reset button
+  document.addEventListener('click', e => {
+    if (e.target && e.target.id === 'gv-btn-reset-usage') {
+      chrome.runtime.sendMessage({ action: 'reset_ai_usage' }, () => {
+        updateUsageBar({ requests: 0, tokensTotal: 0 });
+      });
+    }
+  });
+
+  // Load usage on init
+  loadAndShowUsage();
+
+
+  const SIGNAL_WORDS = [
+    'always', 'usually', 'often', 'everyday', 'every day', 'sometimes', 'never', 'seldom', 'rarely',
+    'now', 'right now', 'at the moment', 'at present', 'look!', 'listen!', 
+    'since', 'for', 'already', 'just', 'yet', 'recently', 'lately', 'up to now', 'so far',
+    'yesterday', 'ago', 'in the past', 'last night', 'last week', 'last month', 'last year',
+    'tomorrow', 'next week', 'next month', 'next year', 'in the future', 'soon',
+    'while', 'when', 'before', 'after', 'by the time', 'as soon as',
+    'by the end of', 'by next', 'by tomorrow', 'at this time tomorrow', 'be going to'
+  ];
+
+  function highlightSignalWords(text) {
+    if (!text) return text;
+    let tmp = escapeHtml(text);
+    SIGNAL_WORDS.forEach(word => {
+      const regex = new RegExp(`\\b(${word})\\b`, 'gi');
+      tmp = tmp.replace(regex, '<strong style="color:var(--accent-orange);">$1</strong>');
+    });
+    return tmp;
+  }
+
+  function renderPracticeList() {
+    const listEl = document.getElementById('gv-practice-list');
+    if (!listEl) return;
+    listEl.innerHTML = '<div style="color:var(--text-secondary); padding:10px;">Đang tải danh sách...</div>';
+    chrome.runtime.sendMessage({ action: 'get_grammar_sentences' }, (res) => {
+      if (res && res.data && res.data.length > 0) {
+        let html = '';
+        res.data.forEach(item => {
+          const sent = highlightSignalWords(item.sentence || item.english);
+          const english = escapeHtml(item.english || '');
+          const vietnamese = escapeHtml(item.vietnamese || '');
+          const badge = item.source === 'ai' ? '<span style="font-size:11px; padding:2px 6px; background:var(--accent-purple); color:#fff; border-radius:4px; margin-left:8px;">AI</span>' : '<span style="font-size:11px; padding:2px 6px; background:var(--accent-blue); color:#fff; border-radius:4px; margin-left:8px;">Thaygiap</span>';
+          
+          html += `
+            <div style="background:var(--bg-card); padding:15px; border-radius:8px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:8px;">
+              <div style="font-size:16px; color:var(--text-primary); font-weight:500;">
+                ${sent} ${badge}
+              </div>
+              <div style="font-size:14px; margin-top:4px;">
+                <span style="color:var(--text-secondary);">✓ Đáp án chính xác: </span><span style="color:var(--accent-green); font-weight:bold;">${english}</span>
+              </div>
+              ${ vietnamese ? `<div style="font-size:14px; color:var(--text-secondary);">🇻🇳 Nghĩa: ${vietnamese}</div>` : '' }
+              <div style="font-size:12px; color:var(--text-tertiary); margin-top:8px;">
+                Đã học vào: ${new Date(item.lastSeen).toLocaleDateString('vi-VN')}
+              </div>
+            </div>
+          `;
+        });
+        listEl.innerHTML = html;
+      } else {
+        listEl.innerHTML = '<div style="color:var(--text-secondary); text-align:center; padding:20px;">Kho ngữ pháp trống! Hãy rèn luyện trên Thaygiap hoặc AI tạo câu để lưu lại lịch sử.</div>';
+      }
+    });
+  }
+
+  const contentArea = document.getElementById('gv-content-area');
+  
+  // Set default
+  if(contentArea) {
+    const defaultBtn = document.getElementById('btn-gv-tab-tenses');
+    if(defaultBtn) defaultBtn.click(); // ensure click handles the rest
+  }
+
+  const btnTenses = document.getElementById('btn-gv-tab-tenses');
+  const btnSigns = document.getElementById('btn-gv-tab-signs');
+  const btnPractice = document.getElementById('btn-gv-tab-practice');
+  const btnAiGen = document.getElementById('btn-gv-tab-ai-gen');
+
+  const buttons = [btnTenses, btnSigns, btnPractice, btnAiGen];
+  const contents = [tensesHTML, signsHTML, practiceHTML, aiGenHTML];
+
+  buttons.forEach((btn, index) => {
+    if(!btn) return;
+    btn.addEventListener('click', () => {
+      // Toggle active states
+      buttons.forEach(b => {
+        if(b) {
+          b.classList.remove('btn-primary');
+          b.classList.add('btn-secondary');
+        }
+      });
+      btn.classList.add('btn-primary');
+      btn.classList.remove('btn-secondary');
+
+      contentArea.innerHTML = contents[index];
+
+      // Custom logic based on active tab
+      if (index === 2) { // Practice tab
+        renderPracticeList();
+        const refreshBtn = document.getElementById('btn-gv-refresh-practice');
+        if (refreshBtn) refreshBtn.addEventListener('click', renderPracticeList);
+      }
+
+      // Setup AI generation logic if AI Gen tab is selected
+      if(index === 3) {
+        const aiSubmit = document.getElementById('gv-btn-ai-submit');
+        const aiInput = document.getElementById('gv-ai-input');
+        const aiResult = document.getElementById('gv-ai-result');
+        const tenseSelect = document.getElementById('gv-ai-tense');
+        const irregularSelect = document.getElementById('gv-ai-irregular');
+
+        const amountSelect = document.getElementById('gv-ai-amount');
+
+        if (aiSubmit && aiInput && aiResult) {
+          aiSubmit.addEventListener('click', () => {
+             const extraVal = aiInput.value.trim();
+             const tense = tenseSelect ? tenseSelect.value : 'Ngẫu nhiên';
+             const irregular = irregularSelect ? irregularSelect.value : 'Bất kỳ';
+             const amount = amountSelect ? amountSelect.value : '1';
+
+             aiSubmit.disabled = true;
+             aiSubmit.textContent = 'Đang gọi AI...';
+             aiResult.style.display = 'block';
+             aiResult.innerHTML = 'AI đang phân tích và tạo ví dụ...';
+
+             const promptText = `Hãy tạo ĐÚNG VÀ ĐỦ ${amount} câu tiếng Anh minh hoạ cấu trúc ngữ pháp.
+Yêu cầu bắt buộc về nội dung:
+- Thì cơ bản: ${tense}
+- Từ vựng: ${irregular}. ${extraVal ? '(Phải chứa từ: "' + extraVal + '")' : ''}
+
+Mỗi câu phải đúc kết riêng với định dạng chính xác và phân tách với nhau bằng đường kẻ ngang (---):
+**Câu:** (câu tiếng anh gốc, BẮT BUỘC BỌC phần động từ cần chia trong cặp dấu sao kép và MỞ NGOẶC ĐƠN TỪ NGUYÊN MẪU ngay sau đó. VD: She **will sing** (sing) a song.)
+**Tên thì:** (tên đầy đủ của thì ngữ pháp bằng tiếng Việt, VD: Thì Tương lai Đơn)
+**Nghĩa:** (nghĩa tiếng việt)
+**Dấu hiệu nhận biết:** (liệt kê các từ khoá trong câu giúp nhận biết đầy đủ thì ${tense})
+**Giải thích:** (lý do chia thì ngắn gọn)
+---`;
+
+             chrome.runtime.sendMessage({
+                action: 'ask_ai',
+                aiType: 'grammar_gen',
+                wordOrContext: promptText
+             }, (res) => {
+                aiSubmit.disabled = false;
+                aiSubmit.textContent = 'Tạo ví dụ bằng AI';
+                if(res && res.result) {
+                  const text = res.result;
+                  
+                  let blocks = text.includes('---') 
+                    ? text.split('---').map(s => s.trim()) 
+                    : text.split(/\*\*Câu:\*\*/i).slice(1).map(s => '**Câu:**' + s.trim());
+                  
+                  // Filter out empty blocks
+                  blocks = blocks.filter(s => s.length > 10);
+                  let finalHtml = '';
+                  let hasAnyBlocks = false;
+
+                  blocks.forEach((block, idx) => {
+                    const cMatch = block.match(/\*\*Câu:\*\*\s*([^\n]+)/i);
+                    const tMatch = block.match(/\*\*Tên thì:\*\*\s*([^\n]+)/i);
+                    const nMatch = block.match(/\*\*Nghĩa:\*\*\s*([^\n]+)/i);
+                    const dMatch = block.match(/\*\*Dấu hiệu nhận biết:\*\*\s*([^\n]+)/i);
+                    const gMatch = block.match(/\*\*Giải thích:\*\*\s*([^\n]+)/i);
+
+                    if (cMatch) {
+                      hasAnyBlocks = true;
+                      let sentence = cMatch[1].trim();
+                      const tenseName = tMatch ? tMatch[1].trim() : tense;
+                      const nghia = nMatch ? nMatch[1].trim() : '';
+                      const dauhieu = dMatch ? dMatch[1].trim() : '';
+                      const giaithich = gMatch ? gMatch[1].trim() : '';
+                      
+                      let hasBlanks = false;
+                      const clozeSentence = escapeHtml(sentence).replace(/\*\*([^*]+)\*\*/g, (match, p1) => {
+                         hasBlanks = true;
+                         return '<input type="text" class="ai-quiz-input" data-answer="' + btoa(encodeURIComponent(p1.trim())) + '" placeholder="chia động từ" style="margin: 0 4px; padding:2px 8px; border:1px dashed var(--accent-purple); border-radius:4px; background:var(--bg-input); color:var(--text-primary); outline:none; font-weight:bold; width:' + Math.max(80, p1.length * 10) + 'px;">';
+                      });
+
+                      const englishPlain = sentence.replace(/\*\*([^*]+)\*\*/g, '$1');
+
+                      // Save to Grammar Vault immediately
+                      try {
+                        chrome.runtime.sendMessage({
+                          action: 'save_grammar_sentence',
+                          payload: {
+                            english: englishPlain,
+                            vietnamese: nghia,
+                            source: 'ai',
+                            isCorrect: true
+                          }
+                        });
+                      } catch(e) {}
+
+                      if (hasBlanks) {
+                         const solvedHtml = escapeHtml(sentence).replace(/\*\*([^*]+)\*\*/g, '<span style="color:var(--accent-orange);">$1</span>');
+                         finalHtml += `
+
+                                       <div class="ai-quiz-panel" style="margin-bottom:15px; padding:15px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-card); box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                               <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                                 <span style="padding:3px 12px; border-radius:20px; font-size:12px; font-weight:700; background:linear-gradient(135deg,rgba(102,126,234,0.25),rgba(118,75,162,0.15)); color:var(--accent-blue); border:1px solid rgba(102,126,234,0.3)">📚 ${escapeHtml(tenseName)}</span>
+                                 <span style="font-size:13px; color:var(--text-muted); font-weight:600;">Câu ${idx+1}</span>
+                               </div>
+                               <div style="font-size:16px; margin-bottom:12px; line-height:1.8;">${clozeSentence}</div>
+                               <button class="btn btn-primary ai-quiz-check" style="padding:4px 12px; font-size:13px;">Kiểm tra đáp án</button>
+                               <div class="ai-quiz-feedback" style="display:none; margin-top:12px; font-size:14px; line-height:1.6; border-top:1px dashed var(--border-color); padding-top:12px;">
+                                 <div style="color:var(--accent-green); margin-bottom:8px; font-size:15px;">✓ Lời giải: <strong>${solvedHtml}</strong></div>
+                                 ${nghia ? '<div style="margin-bottom:4px;"><strong>🇻🇳 Nghĩa:</strong> ' + escapeHtml(nghia) + '</div>' : ''}
+                                 ${dauhieu ? '<div style="margin-bottom:4px;padding:6px 10px;background:rgba(102,126,234,0.08);border-radius:6px;border-left:3px solid var(--accent-blue);"><strong>🔍 Dấu hiệu nhận biết thì ' + escapeHtml(tenseName) + ':</strong> ' + escapeHtml(dauhieu) + '</div>' : ''}
+                                 ${giaithich ? '<div style="padding:6px 10px;background:rgba(52,211,153,0.08);border-radius:6px;border-left:3px solid var(--accent-green);"><strong>💡 Khắc sâu:</strong> ' + escapeHtml(giaithich) + '</div>' : ''}
+                               </div>
+                             </div>
+                          `;
+                      } else {
+                         finalHtml += '<div style="margin-bottom:10px; padding:10px; background:var(--bg-card); border-radius:6px;">' + escapeHtml(sentence) + '</div>';
+                      }
+                    }
+                  });
+
+                  if (hasAnyBlocks) {
+                     aiResult.innerHTML = `
+                       <h4 style="margin-bottom:12px; color:var(--accent-purple);">Bản rèn luyện đúc kết riêng cho bạn:</h4>
+                       ${finalHtml}
+                     `;
+                     
+                     const checkBtns = aiResult.querySelectorAll('.ai-quiz-check');
+                     checkBtns.forEach(btn => {
+                        btn.addEventListener('click', function() {
+                           const panel = this.closest('.ai-quiz-panel');
+                           const inputs = panel.querySelectorAll('.ai-quiz-input');
+                           const feedback = panel.querySelector('.ai-quiz-feedback');
+                           
+                           let allCorrect = true;
+                           inputs.forEach(inp => {
+                              const correctAnswer = decodeURIComponent(atob(inp.getAttribute('data-answer'))).toLowerCase().trim();
+                              const userAnswer = inp.value.toLowerCase().trim();
+                              if (userAnswer === correctAnswer) {
+                                 inp.style.borderColor = 'var(--accent-green)';
+                                 inp.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+                                 inp.disabled = true;
+                              } else {
+                                 inp.style.borderColor = 'var(--accent-red)';
+                                 inp.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                                 allCorrect = false;
+                              }
+                           });
+                           
+                           this.style.display = 'none';
+                           feedback.style.display = 'block';
+                        });
+                     });
+                  } else {
+                     aiResult.innerHTML = escapeHtml(text).replace(/\n/g, '<br/>');
+                  }
+                  
+                } else {
+                  const errorMsg = res && res.error ? res.error : 'Lỗi khi gọi AI. Hãy kiểm tra lại API Key.';
+                  aiResult.innerHTML = `<span style="color:var(--accent-red)">${escapeHtml(errorMsg)}</span>`;
+                }
+             });
+          });
+        }
+      }
+    });
+  });
 });

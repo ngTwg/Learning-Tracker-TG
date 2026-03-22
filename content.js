@@ -2162,7 +2162,7 @@
           <span id="tg-last-error-text"></span>
           <button id="tg-btn-ask-ai" class="tg-mini-btn" style="display:none; padding: 2px 6px;" title="Hỏi AI tại sao sai">✨ Hỏi AI</button>
         </div>
-        <div id="tg-ai-explanation" class="tg-ai-explanation" style="display:none; font-size: 11px; margin-top: 5px; padding: 6px; background: rgba(0,0,0,0.15); border-left: 2px solid #a855f7; border-radius: 4px; white-space: pre-wrap;"></div>
+        <div id="tg-ai-explanation" class="tg-ai-explanation" style="display:none; font-size: 13px; line-height: 1.5; color: #f1f5f9; margin-top: 8px; padding: 10px 12px; background: rgba(30, 41, 59, 0.95); border-left: 3px solid #a855f7; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></div>
 
         <div class="tg-hud-row tg-actions">
           <button class="tg-action-btn" id="tg-btn-pomodoro">🍅 Pomodoro 25:00</button>
@@ -2739,8 +2739,7 @@
     }
 
     const { vietnamese, userInput, correctAnswer, promptText } = state.lastErrorContext;
-    const prompt = `Học sinh đang làm bài và dịch câu tiếng Việt: "${vietnamese}".\n${promptText ? 'Ngữ cảnh bài: ' + promptText + '\n' : ''}Học sinh nhập: "${userInput}".\nĐáp án đúng là: "${correctAnswer}".\nHãy giải thích ngắn gọn, dễ hiểu lý do học sinh sai và cách ghi nhớ đúng.`;
-
+    const prompt = `Tình huống: Học sinh đang dịch/nhập câu tiếng Việt: "${vietnamese}".\n${promptText ? 'Ngữ cảnh: ' + promptText + '\n' : ''}Học sinh nhập: "${userInput}".\nĐáp án đúng: "${correctAnswer}".\n\nYêu cầu dành cho AI:\n1. Giải thích nguyên nhân sai siêu ngắn gọn, tuyệt đối dùng từ ngữ thông dụng cực kỳ dễ hiểu (không dùng từ chuyên ngành hàn lâm).\n2. Trình bày bằng dấu gạch đầu dòng rõ ràng, cách dòng (ví dụ: "- Nguyên nhân sai:", "- Cách nhớ đúng:").\n3. Trả lời luôn vào trọng tâm, sửa lỗi từ dễ thấy (VD: sai chính tả, thêm s/es) thay vì giải thích quá sâu vòng vo.`;
     chrome.runtime.sendMessage({
       action: 'ask_ai',
       aiType: 'grammar',

@@ -16,6 +16,20 @@ console.log('[ThayGiap Tracker] Background service worker started');
 const CONTEXT_MENU_ADD_REVIEW = 'tg-add-selection-review';
 const examLockByWindow = new Map(); // windowId -> { tabId, updatedAt }
 const examLockNotifyByTab = new Map(); // tabId -> timestamp
+const AI_PROVIDER_CONFIG = Object.freeze({
+  openai: {
+    label: 'OpenAI',
+    model: 'gpt-4o-mini'
+  },
+  gemini: {
+    label: 'Google Gemini',
+    model: 'gemini-2.5-flash'
+  },
+  openrouter: {
+    label: 'OpenRouter',
+    model: 'google/gemini-2.5-flash'
+  }
+});
 
 // ============ Pomodoro State ============
 let isPomodoroRunning = false;
@@ -100,6 +114,9 @@ async function handleMessage(message, sender) {
     case 'ask_ai':
       return await handleAskAi(message);
 
+    case 'test_ai_connection':
+      return await handleTestAiConnection(message);
+
     case 'pomodoro_state':
       isPomodoroRunning = message.isRunning;
       isPomodoroBreak = message.isBreak;
@@ -116,15 +133,56 @@ async function handleMessage(message, sender) {
       });
       return { ok: true };
 
+    case 'save_grammar_sentence':
+      return { ok: true, data: await saveGrammarSentence(message.payload) };
+
+    case 'get_grammar_sentences':
+      return { ok: true, data: await getGrammarSentences() };
+
+    case 'update_grammar_sentence':
+      await markGrammarSentenceCorrect(message.id, message.isCorrect);
+      return { ok: true };
+
+    case 'get_ai_usage':
+      return { ok: true, data: await getAiUsage() };
+
+    case 'reset_ai_usage':
+      await resetAiUsage();
+      return { ok: true };
+
     default:
       return { ok: false, error: `Unknown action: ${message.action}` };
   }
 }
 
+async function getAiUsage() {
+  const today = new Date().toISOString().slice(0, 10);
+  const res = await new Promise(r => chrome.storage.local.get('ai_usage', r));
+  const usage = res.ai_usage || {};
+  if (usage.date !== today) return { date: today, requests: 0, tokensIn: 0, tokensOut: 0, tokensTotal: 0 };
+  return usage;
+}
+
+async function saveAiUsage(delta) {
+  const today = new Date().toISOString().slice(0, 10);
+  const current = await getAiUsage();
+  const next = {
+    date: today,
+    requests: (current.requests || 0) + (delta.requests || 0),
+    tokensIn: (current.tokensIn || 0) + (delta.tokensIn || 0),
+    tokensOut: (current.tokensOut || 0) + (delta.tokensOut || 0),
+    tokensTotal: (current.tokensTotal || 0) + (delta.tokensTotal || 0)
+  };
+  await new Promise(r => chrome.storage.local.set({ ai_usage: next }, r));
+  return next;
+}
+
+async function resetAiUsage() {
+  await new Promise(r => chrome.storage.local.remove('ai_usage', r));
+}
+
 async function handleAskAi(message) {
-  const settings = await getSettings();
-  const provider = settings.aiProvider || 'none';
-  const apiKey = settings.aiKey || '';
+  const { provider, apiKey } = await getAiCredentials(message);
 
   if (provider === 'none' || !apiKey) {
     return { ok: false, error: 'AI provider or API key is not configured.' };
@@ -141,75 +199,283 @@ async function handleAskAi(message) {
 
   if (aiType === 'example') {
     prompt = `Bạn là một giáo viên tiếng Anh xuất sắc. Hãy đưa ra 3 câu ví dụ dễ hiểu mang tính ứng dụng cao chứa từ vựng "${word || wordOrContext}" (nếu có thể, hãy dịch nghĩa tiếng Việt cho các ví dụ này). Lời giải thích phải rất ngắn gọn, trực quan, dễ nhớ.`;
+  } else if (aiType === 'grammar_gen') {
+    prompt = wordOrContext;
   } else if (aiType === 'grammar') {
-    if (wordOrContext && wordOrContext.includes('Học sinh nhập:')) {
+    if (wordOrContext && (wordOrContext.includes('Học sinh nhập:') || wordOrContext.includes('Học sinh viết:'))) {
       prompt = wordOrContext; // Use the rich prompt passed directly from content script
     } else {
-      prompt = `Bạn là một giáo viên tiếng Anh xuất sắc. Học sinh làm bài kiểm tra và đã gõ sai phần này.
+      prompt = `Bạn là một giáo viên tiếng Anh xuất sắc.
 Ngữ cảnh (câu hỏi/từ): "${contextInfo || word || wordOrContext}"
 Học sinh gõ sai thành: "${history ? history.map(h => h.typed).join(', ') : '?'}"
-Hãy giải thích siêu ngắn gọn (tối đa 3 câu) tại sao học sinh sai, và quy tắc đúng là gì. Không dùng quá nhiều thuật ngữ phức tạp.`;
+
+Yêu cầu:
+1. Giải thích siêu ngắn gọn, cực kỳ dễ hiểu, tuyệt đối không dùng thuật ngữ chuyên ngành ngữ pháp phức tạp.
+2. Trình bày bằng các gạch đầu dòng rõ ràng để dễ đọc (VD: "- Lỗi sai:", "- Cách nhớ đúng:").
+3. Sửa lại cho đúng và hướng dẫn trực quan.`;
     }
   } else {
     return { ok: false, error: 'Invalid AI prompt type.' };
   }
 
   try {
-    let resultText = '';
-    
-    if (provider === 'openai') {
-      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7
-        })
-      });
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error.message);
-      resultText = data.choices[0].message.content;
-
-    } else if (provider === 'gemini') {
-      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      });
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error.message);
-      resultText = data.candidates[0].content.parts[0].text;
-
-    } else if (provider === 'openrouter') {
-      const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [{ role: 'user', content: prompt }]
-        })
-      });
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error.message);
-      resultText = data.choices[0].message.content;
+    const { text: resultText, usage } = await requestAiText({ provider, apiKey, prompt });
+    // Track usage
+    if (usage && usage.tokensTotal > 0) {
+      await saveAiUsage({ requests: 1, ...usage });
+    } else {
+      await saveAiUsage({ requests: 1, tokensIn: 0, tokensOut: 0, tokensTotal: 0 });
     }
-
-    return { ok: true, data: resultText };
+    return { ok: true, data: resultText, result: resultText };
   } catch (error) {
     console.error('AI API error:', error);
     return { ok: false, error: 'AI Request failed: ' + error.message };
   }
+}
+
+async function handleTestAiConnection(message) {
+  const { provider, apiKey } = await getAiCredentials(message);
+  const config = AI_PROVIDER_CONFIG[provider];
+
+  if (!config) {
+    return { ok: false, error: 'Nhà cung cấp AI không hợp lệ.' };
+  }
+
+  if (!apiKey) {
+    return { ok: false, error: 'Bạn chưa nhập API key để kiểm tra.' };
+  }
+
+  try {
+    const { text: resultText } = await requestAiText({
+      provider,
+      apiKey,
+      prompt: 'Trả lời chính xác 1 từ: OK',
+      isConnectionTest: true
+    });
+
+    return {
+      ok: true,
+      data: {
+        provider,
+        providerLabel: config.label,
+        model: config.model,
+        preview: resultText,
+        message: `Kết nối thành công với ${config.label} (${config.model}). AI phản hồi: "${resultText}".`
+      }
+    };
+  } catch (error) {
+    console.error('AI connection test failed:', error);
+    return { ok: false, error: error.message || 'Không thể kiểm tra API AI.' };
+  }
+}
+
+async function getAiCredentials(message = {}) {
+  const settings = await getSettings();
+  const hasProvider = Object.prototype.hasOwnProperty.call(message, 'provider');
+  const hasApiKey = Object.prototype.hasOwnProperty.call(message, 'apiKey');
+
+  const provider = hasProvider ? (message.provider || 'none') : (settings.aiProvider || 'none');
+  const apiKeyRaw = hasApiKey ? message.apiKey : settings.aiKey;
+  const apiKey = typeof apiKeyRaw === 'string' ? apiKeyRaw.trim() : '';
+
+  return { provider, apiKey };
+}
+
+async function requestAiText({ provider, apiKey, prompt, isConnectionTest = false }) {
+  const config = AI_PROVIDER_CONFIG[provider];
+
+  if (!config) {
+    throw new Error(`Unsupported AI provider: ${provider}`);
+  }
+
+  if (provider === 'openai') {
+    const data = await postJson(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: isConnectionTest ? 0 : 0.7,
+          max_tokens: isConnectionTest ? 8 : 2000
+        })
+      },
+      provider
+    );
+
+    const content = normalizeMessageContent(data?.choices?.[0]?.message?.content);
+    if (!content) {
+      throw new Error(`${config.label} không trả về nội dung phản hồi.`);
+    }
+    const usageOai = data?.usage || {};
+    return {
+      text: content,
+      usage: {
+        tokensIn: usageOai.prompt_tokens || 0,
+        tokensOut: usageOai.completion_tokens || 0,
+        tokensTotal: usageOai.total_tokens || 0
+      }
+    };
+  }
+
+  if (provider === 'gemini') {
+    const body = {
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }]
+        }
+      ],
+      generationConfig: {
+        temperature: isConnectionTest ? 0 : 0.7,
+        maxOutputTokens: isConnectionTest ? 8 : 8192
+      }
+    };
+
+    const data = await postJson(
+      `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify(body)
+      },
+      provider
+    );
+
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const content = parts
+      .map(part => part?.text || '')
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+
+    if (!content) {
+      const finishReason = data?.candidates?.[0]?.finishReason;
+      throw new Error(
+        finishReason
+          ? `${config.label} không trả về nội dung (finish reason: ${finishReason}).`
+          : `${config.label} không trả về nội dung phản hồi.`
+      );
+    }
+    const meta = data?.usageMetadata || {};
+    return {
+      text: content,
+      usage: {
+        tokensIn: meta.promptTokenCount || 0,
+        tokensOut: meta.candidatesTokenCount || 0,
+        tokensTotal: meta.totalTokenCount || 0
+      }
+    };
+  }
+
+  // OpenRouter / OpenAI path - return same shape
+  const data2 = await postJson(
+    'https://openrouter.ai/api/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: isConnectionTest ? 0 : 0.7,
+        max_tokens: isConnectionTest ? 8 : 2000
+      })
+    },
+    provider
+  );
+
+  const content2 = normalizeMessageContent(data2?.choices?.[0]?.message?.content);
+  if (!content2) {
+    throw new Error(`${config.label} không trả về nội dung phản hồi.`);
+  }
+  const usage2 = data2?.usage || {};
+  return {
+    text: content2,
+    usage: {
+      tokensIn: usage2.prompt_tokens || 0,
+      tokensOut: usage2.completion_tokens || 0,
+      tokensTotal: usage2.total_tokens || 0
+    }
+  };
+}
+
+async function postJson(url, options, provider) {
+  const response = await fetch(url, options);
+  const rawText = await response.text();
+
+  let data = null;
+  if (rawText) {
+    try {
+      data = JSON.parse(rawText);
+    } catch (_) {
+      data = null;
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(buildAiHttpError(provider, response, data, rawText));
+  }
+
+  if (data?.error) {
+    const message = typeof data.error === 'string'
+      ? data.error
+      : (data.error.message || data.error.status || JSON.stringify(data.error));
+    throw new Error(message);
+  }
+
+  return data;
+}
+
+function buildAiHttpError(provider, response, data, rawText) {
+  const config = AI_PROVIDER_CONFIG[provider];
+  let detail = '';
+
+  if (typeof data?.error === 'string') {
+    detail = data.error;
+  } else if (data?.error?.message) {
+    detail = data.error.message;
+  } else if (data?.message) {
+    detail = data.message;
+  } else if (rawText) {
+    detail = rawText.slice(0, 300);
+  } else {
+    detail = response.statusText || 'Unknown error';
+  }
+
+  if (provider === 'openrouter' && response.status === 402) {
+    detail = 'OpenRouter chưa đủ credit hoặc model này yêu cầu thanh toán.';
+  }
+
+  return `${config?.label || provider} API lỗi (${response.status}): ${detail}`;
+}
+
+function normalizeMessageContent(content) {
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map(part => {
+        if (typeof part === 'string') return part;
+        return part?.text || '';
+      })
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+  }
+
+  return '';
 }
 
 function isThayGiapUrl(url) {
@@ -399,6 +665,28 @@ async function processAnswerResult(payload) {
       currentItem: context.currentItem,
       correct: data.isCorrect ? 1 : 0,
       wrong: data.isCorrect ? 0 : 1
+    });
+  }
+
+  // Grammar sentences (Thaygiap tests)
+  if (data.promptText && typeof data.promptText === 'string' && data.promptText.split(' ').length > 2) {
+    let cloze = data.promptText;
+    const answer = data.correctAnswer || data.english || data.userInput;
+    const verbHint = data.baseVerb ? `(${data.baseVerb})` : null;
+    
+    if (verbHint && cloze.includes(verbHint)) {
+      cloze = cloze.replace(verbHint, `___ (${data.baseVerb})`);
+    } else {
+      cloze = `${data.promptText} [___]`;
+    }
+
+    await saveGrammarSentence({
+      sentence: cloze,
+      english: answer,
+      vietnamese: data.vietnamese || '',
+      source: 'thaygiap',
+      isCorrect: data.isCorrect,
+      note: context.lessonTitle || ''
     });
   }
 }

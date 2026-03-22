@@ -11,7 +11,8 @@ const STORAGE_KEYS = {
   VOCAB_SUMMARY: 'tg_vocab_summary',
   SESSION_SUMMARY: 'tg_session_summary',
   SETTINGS: 'tg_settings',
-  LAST_SYNC: 'tg_last_sync'
+  LAST_SYNC: 'tg_last_sync',
+  GRAMMAR_LIST: 'tg_grammar_list'
 };
 
 const MAX_EVENTS = 50000; // Max events to keep before auto-cleanup
@@ -575,11 +576,12 @@ async function exportAllData() {
     STORAGE_KEYS.EVENTS,
     STORAGE_KEYS.VOCAB_SUMMARY,
     STORAGE_KEYS.SESSION_SUMMARY,
-    STORAGE_KEYS.SETTINGS
+    STORAGE_KEYS.SETTINGS,
+    STORAGE_KEYS.GRAMMAR_LIST
   ]);
   return {
     exportedAt: new Date().toISOString(),
-    version: '1.1.0',
+    version: '1.2.0',
     ...data
   };
 }
@@ -588,8 +590,64 @@ async function clearAllData() {
   await storageRemove([
     STORAGE_KEYS.EVENTS,
     STORAGE_KEYS.VOCAB_SUMMARY,
-    STORAGE_KEYS.SESSION_SUMMARY
+    STORAGE_KEYS.SESSION_SUMMARY,
+    STORAGE_KEYS.GRAMMAR_LIST
   ]);
+}
+
+// ============ Grammar Sentence ============
+
+async function saveGrammarSentence(payload) {
+  const { sentence, english, vietnamese, source, isCorrect, note } = payload;
+  if (!sentence && !english) return null;
+  
+  const data = await storageGet([STORAGE_KEYS.GRAMMAR_LIST]);
+  const list = data[STORAGE_KEYS.GRAMMAR_LIST] || [];
+
+  const existing = list.find(item => item.english === english && item.sentence === sentence);
+  if (existing) {
+    existing.attempts = (existing.attempts || 0) + 1;
+    existing.lastSeen = Date.now();
+    if (!isCorrect) existing.wrongAttempts = (existing.wrongAttempts || 0) + 1;
+    else existing.correctAttempts = (existing.correctAttempts || 0) + 1;
+  } else {
+    list.push({
+      id: generateUUID(),
+      sentence: sentence || english || '',
+      english: english || sentence || '',
+      vietnamese: vietnamese || '',
+      source: source || 'thaygiap', 
+      isCorrect: isCorrect || false,
+      note: note || '',
+      attempts: 1,
+      correctAttempts: isCorrect ? 1 : 0,
+      wrongAttempts: isCorrect ? 0 : 1,
+      createdAt: Date.now(),
+      lastSeen: Date.now()
+    });
+  }
+
+  if (list.length > 2000) list.shift();
+  await storageSet({ [STORAGE_KEYS.GRAMMAR_LIST]: list });
+  return true;
+}
+
+async function getGrammarSentences() {
+  const data = await storageGet([STORAGE_KEYS.GRAMMAR_LIST]);
+  return (data[STORAGE_KEYS.GRAMMAR_LIST] || []).sort((a,b) => b.lastSeen - a.lastSeen);
+}
+
+async function markGrammarSentenceCorrect(id, isCorrect) {
+  const data = await storageGet([STORAGE_KEYS.GRAMMAR_LIST]);
+  const list = data[STORAGE_KEYS.GRAMMAR_LIST] || [];
+  const idx = list.findIndex(i => i.id === id);
+  if (idx !== -1) {
+     list[idx].attempts = (list[idx].attempts || 0) + 1;
+     list[idx].lastSeen = Date.now();
+     if(isCorrect) list[idx].correctAttempts = (list[idx].correctAttempts || 0) + 1;
+     else list[idx].wrongAttempts = (list[idx].wrongAttempts || 0) + 1;
+     await storageSet({ [STORAGE_KEYS.GRAMMAR_LIST]: list });
+  }
 }
 
 // ============ Statistics Helpers ============
