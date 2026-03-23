@@ -604,7 +604,7 @@ async function saveGrammarSentence(payload) {
   const data = await storageGet([STORAGE_KEYS.GRAMMAR_LIST]);
   const list = data[STORAGE_KEYS.GRAMMAR_LIST] || [];
 
-  const existing = list.find(item => item.english === english && item.sentence === sentence);
+  const existing = list.find(item => (item.english && item.english === english) || (item.sentence && item.sentence === sentence));
   if (existing) {
     existing.attempts = (existing.attempts || 0) + 1;
     existing.lastSeen = Date.now();
@@ -630,6 +630,51 @@ async function saveGrammarSentence(payload) {
   if (list.length > 2000) list.shift();
   await storageSet({ [STORAGE_KEYS.GRAMMAR_LIST]: list });
   return true;
+}
+
+async function saveGrammarSentences(sentences = []) {
+  if (!Array.isArray(sentences) || sentences.length === 0) return { savedCount: 0 };
+  
+  const data = await storageGet([STORAGE_KEYS.GRAMMAR_LIST]);
+  const list = data[STORAGE_KEYS.GRAMMAR_LIST] || [];
+  let savedCount = 0;
+
+  sentences.forEach(payload => {
+    const { sentence, english, vietnamese, source, isCorrect, note } = payload;
+    if (!sentence && !english) return;
+
+    const existing = list.find(item => (item.english && item.english === english) || (item.sentence && item.sentence === sentence));
+    if (existing) {
+      existing.attempts = (existing.attempts || 0) + 1;
+      existing.lastSeen = Date.now();
+      if (!isCorrect) existing.wrongAttempts = (existing.wrongAttempts || 0) + 1;
+      else existing.correctAttempts = (existing.correctAttempts || 0) + 1;
+    } else {
+      list.push({
+        id: generateUUID(),
+        sentence: sentence || english || '',
+        english: english || sentence || '',
+        vietnamese: vietnamese || '',
+        source: source || 'thaygiap', 
+        isCorrect: isCorrect || false,
+        note: note || '',
+        attempts: 1,
+        correctAttempts: isCorrect ? 1 : 0,
+        wrongAttempts: isCorrect ? 0 : 1,
+        createdAt: Date.now(),
+        lastSeen: Date.now()
+      });
+      savedCount++;
+    }
+  });
+
+  // Keep last 2000
+  if (list.length > 2000) {
+    list.splice(0, list.length - 2000);
+  }
+
+  await storageSet({ [STORAGE_KEYS.GRAMMAR_LIST]: list });
+  return { savedCount };
 }
 
 async function getGrammarSentences() {

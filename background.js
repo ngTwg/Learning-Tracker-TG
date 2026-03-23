@@ -134,10 +134,16 @@ async function handleMessage(message, sender) {
       return { ok: true };
 
     case 'save_grammar_sentence':
-      return { ok: true, data: await saveGrammarSentence(message.payload) };
+      await saveGrammarSentence(message.payload);
+      return { ok: true };
 
     case 'get_grammar_sentences':
       return { ok: true, data: await getGrammarSentences() };
+
+    case 'save_grammar_sentences': {
+      const batchRes = await saveGrammarSentences(message.sentences);
+      return { ok: true, data: batchRes };
+    }
 
     case 'update_grammar_sentence':
       await markGrammarSentenceCorrect(message.id, message.isCorrect);

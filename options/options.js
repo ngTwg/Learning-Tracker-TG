@@ -21,6 +21,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 let rvSettingsInitialized = false;
 let vocabCompactMode = false;
+let aiLastGeneratedSentences = [];
+let hideGrammarHints = false;
 
 // ============ Theme Management ============
 async function loadTheme() {
@@ -1674,6 +1676,10 @@ function renderHistoryEvents() {
     exam_lock_violation: '⛔'
   };
 
+  const examLockNotifyByTab = new Map(); // tabId -> timestamp
+  let aiLastGeneratedSentences = [];
+  let hideGrammarHints = false;
+
   container.innerHTML = pageEvents.map(event => {
     const icon = icons[event.type] || '📌';
     const time = new Date(event.timestamp).toLocaleTimeString('vi-VN', {
@@ -2963,9 +2969,16 @@ document.addEventListener('DOMContentLoaded', () => {
   `;
 
   const practiceHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
       <h3 style="margin:0; color:var(--text-primary);">⚔️ Ôn tập Thì & Dấu hiệu</h3>
-      <button id="btn-gv-refresh-practice" class="btn btn-secondary" style="padding:6px 12px; font-size:13px;">Làm mới</button>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <label class="toggle-switch" style="font-size:13px; color:var(--text-secondary); display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="gv-practice-hide-hints" ${hideGrammarHints ? 'checked' : ''}>
+          <span>Ẩn gợi ý</span>
+        </label>
+        <button id="btn-gv-shuffle-practice" class="btn btn-primary" style="padding:6px 12px; font-size:13px; background:var(--gradient-primary);">🎲 Ôn tập ngẫu nhiên</button>
+        <button id="btn-gv-refresh-practice" class="btn btn-secondary" style="padding:6px 12px; font-size:13px;">Làm mới</button>
+      </div>
     </div>
     <div id="gv-practice-list" style="display:flex; flex-direction:column; gap:12px;"></div>
   `;
@@ -3004,8 +3017,12 @@ document.addEventListener('DOMContentLoaded', () => {
         </select>
       </div>
 
-      <div style="display:flex; gap:10px;">
+      <div style="display:flex; gap:10px; margin-top:12px; align-items:center; flex-wrap:wrap;">
         <input type="text" id="gv-ai-input" placeholder="Từ vựng cần chứa (tùy chọn)" class="search-input" style="flex:2; padding:10px 14px; border-radius:8px;">
+        <label class="toggle-switch" style="font-size:13px; color:var(--text-secondary); display:flex; align-items:center; gap:8px; cursor:pointer; margin:0 10px;">
+          <input type="checkbox" id="gv-ai-hide-hints" ${hideGrammarHints ? 'checked' : ''}>
+          <span>Ẩn gợi ý khi tạo</span>
+        </label>
         <button id="gv-btn-ai-submit" class="btn btn-primary" style="padding:10px 20px; flex:1;">Tạo câu tự động</button>
       </div>
 
@@ -3018,6 +3035,10 @@ document.addEventListener('DOMContentLoaded', () => {
           <div id="gv-usage-bar-fill" style="height:100%; width:0%; background:var(--gradient-primary); border-radius:3px; transition:width 0.4s ease;"></div>
         </div>
         <button id="gv-btn-reset-usage" style="background:none; border:none; cursor:pointer; font-size:11px; color:var(--text-muted); padding:2px 6px; border-radius:4px; transition:all 0.2s;" title="Reset về 0">↺ Reset</button>
+      </div>
+
+      <div id="gv-ai-save-all-container" style="margin-top:14px; display:none; justify-content: flex-end;">
+        <button id="gv-btn-ai-save-all" class="btn btn-success" style="padding:8px 16px; font-size:14px; background:linear-gradient(135deg, #10b981, #059669);">💾 Lưu toàn bộ câu này vào kho</button>
       </div>
 
       <div id="gv-ai-result" style="margin-top:14px; padding:18px; background:var(--bg-secondary); border-radius:12px; display:none; color:var(--text-primary); line-height:1.6; border-left:4px solid var(--accent-purple); box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-size:15px;"></div>
@@ -3093,8 +3114,13 @@ document.addEventListener('DOMContentLoaded', () => {
     listEl.innerHTML = '<div style="color:var(--text-secondary); padding:10px;">Đang tải danh sách...</div>';
     chrome.runtime.sendMessage({ action: 'get_grammar_sentences' }, (res) => {
       if (res && res.data && res.data.length > 0) {
+        let sentences = res.data;
+        if (document.getElementById('btn-gv-shuffle-practice')?.classList.contains('active')) {
+          sentences.sort(() => Math.random() - 0.5);
+        }
+
         let html = '';
-        res.data.forEach(item => {
+        sentences.forEach(item => {
           const sent = highlightSignalWords(item.sentence || item.english);
           const english = escapeHtml(item.english || '');
           const vietnamese = escapeHtml(item.vietnamese || '');
@@ -3158,6 +3184,23 @@ document.addEventListener('DOMContentLoaded', () => {
         renderPracticeList();
         const refreshBtn = document.getElementById('btn-gv-refresh-practice');
         if (refreshBtn) refreshBtn.addEventListener('click', renderPracticeList);
+
+        const shuffleBtn = document.getElementById('btn-gv-shuffle-practice');
+        if (shuffleBtn) {
+          shuffleBtn.addEventListener('click', () => {
+            shuffleBtn.classList.toggle('active');
+            renderPracticeList();
+          });
+        }
+
+        const hideHintsCb = document.getElementById('gv-practice-hide-hints');
+        if (hideHintsCb) {
+          hideHintsCb.checked = hideGrammarHints;
+          hideHintsCb.addEventListener('change', () => {
+            hideGrammarHints = hideHintsCb.checked;
+            renderPracticeList();
+          });
+        }
       }
 
       // Setup AI generation logic if AI Gen tab is selected
@@ -3167,8 +3210,39 @@ document.addEventListener('DOMContentLoaded', () => {
         const aiResult = document.getElementById('gv-ai-result');
         const tenseSelect = document.getElementById('gv-ai-tense');
         const irregularSelect = document.getElementById('gv-ai-irregular');
-
         const amountSelect = document.getElementById('gv-ai-amount');
+        const hideHintsCb = document.getElementById('gv-ai-hide-hints');
+        const saveAllBtn = document.getElementById('gv-btn-ai-save-all');
+
+        if (hideHintsCb) {
+          hideHintsCb.checked = hideGrammarHints;
+          hideHintsCb.addEventListener('change', () => {
+            hideGrammarHints = hideHintsCb.checked;
+            aiResult.querySelectorAll('.ai-badge-tense, .ai-clue-block').forEach(el => {
+              el.style.display = hideGrammarHints ? 'none' : '';
+            });
+          });
+        }
+
+        if (saveAllBtn) {
+          saveAllBtn.onclick = async () => {
+            if (aiLastGeneratedSentences.length > 0) {
+              chrome.runtime.sendMessage({ 
+                action: 'save_grammar_sentences', 
+                sentences: aiLastGeneratedSentences 
+              }, (res) => {
+                if (res?.ok) {
+                  alert(`Đã lưu ${res.data.savedCount} câu vào Kho Ngữ Pháp.`);
+                  aiLastGeneratedSentences = [];
+                  const container = document.getElementById('gv-ai-save-all-container');
+                  if (container) container.style.display = 'none';
+                } else {
+                  alert('Lỗi khi lưu câu: ' + (res?.error || 'Unknown error'));
+                }
+              });
+            }
+          };
+        }
 
         if (aiSubmit && aiInput && aiResult) {
           aiSubmit.addEventListener('click', () => {
@@ -3181,6 +3255,8 @@ document.addEventListener('DOMContentLoaded', () => {
              aiSubmit.textContent = 'Đang gọi AI...';
              aiResult.style.display = 'block';
              aiResult.innerHTML = 'AI đang phân tích và tạo ví dụ...';
+             const container = document.getElementById('gv-ai-save-all-container');
+             if (container) container.style.display = 'none';
 
              const promptText = `Hãy tạo ĐÚNG VÀ ĐỦ ${amount} câu tiếng Anh minh hoạ cấu trúc ngữ pháp.
 Yêu cầu bắt buộc về nội dung:
@@ -3201,15 +3277,15 @@ Mỗi câu phải đúc kết riêng với định dạng chính xác và phân 
                 wordOrContext: promptText
              }, (res) => {
                 aiSubmit.disabled = false;
-                aiSubmit.textContent = 'Tạo ví dụ bằng AI';
+                aiSubmit.textContent = 'Tạo câu tự động';
                 if(res && res.result) {
+                  aiLastGeneratedSentences = [];
                   const text = res.result;
                   
                   let blocks = text.includes('---') 
                     ? text.split('---').map(s => s.trim()) 
                     : text.split(/\*\*Câu:\*\*/i).slice(1).map(s => '**Câu:**' + s.trim());
                   
-                  // Filter out empty blocks
                   blocks = blocks.filter(s => s.length > 10);
                   let finalHtml = '';
                   let hasAnyBlocks = false;
@@ -3224,7 +3300,7 @@ Mỗi câu phải đúc kết riêng với định dạng chính xác và phân 
                     if (cMatch) {
                       hasAnyBlocks = true;
                       let sentence = cMatch[1].trim();
-                      const tenseName = tMatch ? tMatch[1].trim() : tense;
+                      const tName = tMatch ? tMatch[1].trim() : tense;
                       const nghia = nMatch ? nMatch[1].trim() : '';
                       const dauhieu = dMatch ? dMatch[1].trim() : '';
                       const giaithich = gMatch ? gMatch[1].trim() : '';
@@ -3237,38 +3313,19 @@ Mỗi câu phải đúc kết riêng với định dạng chính xác và phân 
 
                       const englishPlain = sentence.replace(/\*\*([^*]+)\*\*/g, '$1');
 
-                      // Save to Grammar Vault immediately
-                      try {
-                        chrome.runtime.sendMessage({
-                          action: 'save_grammar_sentence',
-                          payload: {
-                            english: englishPlain,
-                            vietnamese: nghia,
-                            source: 'ai',
-                            isCorrect: true
-                          }
-                        });
-                      } catch(e) {}
+                      aiLastGeneratedSentences.push({
+                        sentence: sentence,
+                        english: englishPlain,
+                        vietnamese: nghia,
+                        source: 'ai',
+                        isCorrect: true,
+                        note: 'AI: ' + tName
+                      });
 
                       if (hasBlanks) {
-                         const solvedHtml = escapeHtml(sentence).replace(/\*\*([^*]+)\*\*/g, '<span style="color:var(--accent-orange);">$1</span>');
-                         finalHtml += `
-
-                                       <div class="ai-quiz-panel" style="margin-bottom:15px; padding:15px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-card); box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                               <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-                                 <span style="padding:3px 12px; border-radius:20px; font-size:12px; font-weight:700; background:linear-gradient(135deg,rgba(102,126,234,0.25),rgba(118,75,162,0.15)); color:var(--accent-blue); border:1px solid rgba(102,126,234,0.3)">📚 ${escapeHtml(tenseName)}</span>
-                                 <span style="font-size:13px; color:var(--text-muted); font-weight:600;">Câu ${idx+1}</span>
-                               </div>
-                               <div style="font-size:16px; margin-bottom:12px; line-height:1.8;">${clozeSentence}</div>
-                               <button class="btn btn-primary ai-quiz-check" style="padding:4px 12px; font-size:13px;">Kiểm tra đáp án</button>
-                               <div class="ai-quiz-feedback" style="display:none; margin-top:12px; font-size:14px; line-height:1.6; border-top:1px dashed var(--border-color); padding-top:12px;">
-                                 <div style="color:var(--accent-green); margin-bottom:8px; font-size:15px;">✓ Lời giải: <strong>${solvedHtml}</strong></div>
-                                 ${nghia ? '<div style="margin-bottom:4px;"><strong>🇻🇳 Nghĩa:</strong> ' + escapeHtml(nghia) + '</div>' : ''}
-                                 ${dauhieu ? '<div style="margin-bottom:4px;padding:6px 10px;background:rgba(102,126,234,0.08);border-radius:6px;border-left:3px solid var(--accent-blue);"><strong>🔍 Dấu hiệu nhận biết thì ' + escapeHtml(tenseName) + ':</strong> ' + escapeHtml(dauhieu) + '</div>' : ''}
-                                 ${giaithich ? '<div style="padding:6px 10px;background:rgba(52,211,153,0.08);border-radius:6px;border-left:3px solid var(--accent-green);"><strong>💡 Khắc sâu:</strong> ' + escapeHtml(giaithich) + '</div>' : ''}
-                               </div>
-                             </div>
-                          `;
+                         const solvedHtml = escapeHtml(sentence).replace(/\*\*([^*]+)\*\*/g, '<span style="color:var(--accent-orange); font-weight:bold;">$1</span>');
+                         const hideStyle = hideGrammarHints ? 'style="display:none;"' : '';
+                         finalHtml += `<div class="ai-quiz-panel" style="margin-bottom:15px; padding:15px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-card); box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span class="ai-badge-tense" ${hideStyle} style="padding:3px 12px; border-radius:20px; font-size:12px; font-weight:700; background:linear-gradient(135deg,rgba(102,126,234,0.25),rgba(118,75,162,0.15)); color:var(--accent-blue); border:1px solid rgba(102,126,234,0.3)">📚 ${escapeHtml(tName)}</span><span style="font-size:13px; color:var(--text-muted); font-weight:600;">Câu ${idx+1}</span></div><div style="font-size:16px; margin-bottom:12px; line-height:1.8;">${clozeSentence}</div><button class="btn btn-primary ai-quiz-check" style="padding:4px 12px; font-size:13px;">Kiểm tra đáp án</button><div class="ai-quiz-feedback" style="display:none; margin-top:12px; font-size:14px; line-height:1.6; border-top:1px dashed var(--border-color); padding-top:12px;"><div style="color:var(--accent-green); margin-bottom:8px; font-size:15px;">✓ Lời giải: <strong>${solvedHtml}</strong></div>${nghia ? '<div style="margin-bottom:4px;"><strong>🇻🇳 Nghĩa:</strong> ' + escapeHtml(nghia) + '</div>' : ''}${dauhieu ? '<div class="ai-clue-block" ' + hideStyle + ' style="margin-bottom:4px;padding:6px 10px;background:rgba(102,126,234,0.08);border-radius:6px;border-left:3px solid var(--accent-blue);"><strong>🔍 Dấu hiệu thì ' + escapeHtml(tName) + ':</strong> ' + escapeHtml(dauhieu) + '</div>' : ''}${giaithich ? '<div class="ai-deep-block" style="padding:6px 10px;background:rgba(52,211,153,0.08);border-radius:6px;border-left:3px solid var(--accent-green);"><strong>💡 Khắc sâu:</strong> ' + escapeHtml(giaithich) + '</div>' : ''}</div></div>`;
                       } else {
                          finalHtml += '<div style="margin-bottom:10px; padding:10px; background:var(--bg-card); border-radius:6px;">' + escapeHtml(sentence) + '</div>';
                       }
@@ -3276,10 +3333,9 @@ Mỗi câu phải đúc kết riêng với định dạng chính xác và phân 
                   });
 
                   if (hasAnyBlocks) {
-                     aiResult.innerHTML = `
-                       <h4 style="margin-bottom:12px; color:var(--accent-purple);">Bản rèn luyện đúc kết riêng cho bạn:</h4>
-                       ${finalHtml}
-                     `;
+                    aiResult.innerHTML = '<h4 style="margin-bottom:12px; color:var(--accent-purple);">Bản rèn luyện đúc kết riêng cho bạn:</h4>' + finalHtml;
+                    const saveAllContainer = document.getElementById('gv-ai-save-all-container');
+                    if (saveAllContainer) saveAllContainer.style.display = 'flex';
                      
                      const checkBtns = aiResult.querySelectorAll('.ai-quiz-check');
                      checkBtns.forEach(btn => {
