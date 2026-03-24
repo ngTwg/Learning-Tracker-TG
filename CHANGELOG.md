@@ -1,3 +1,16 @@
+## Version 1.5.0 - Agentic Omni-Catcher Ecosystem
+
+### Major Features
+- Omni-Catcher (Trợ lý Đọc hiểu Đa vũ trụ):
+  - Hiển thị pop-up AI siêu nhẹ (Glassmorphism) khi bôi đen từ vựng / câu tiếng Anh trên **bất kỳ trang web nào**.
+  - Kết nối trực tiếp với LLMs (OpenAI/Gemini) để phân tích ngữ pháp, định nghĩa và đưa ra ví dụ trực quan ngay tại chỗ.
+  - Tích hợp 1 chạm để lưu vào hệ thống Flashcard SM-2 của ThayGiap Tracker.
+
+### UI & Aesthetics
+- Thiết kế Floating Button và Pop-up với hiệu ứng Neumorphism / Glassmorphism hiện đại (tương thích Light/Dark mode).
+- Animation mượt mà với cubic-bezier (PopIn, SlideUp).
+- Đã lược bỏ hoàn toàn các loại emoji dư thừa trong tất cả file nguồn, mang lại một code base chuẩn Solid-state và tinh gọn.
+
 # ThayGiap Tracker - UI Upgrade Changelog
 
 ## Version 2.0 - Premium Modern Design
