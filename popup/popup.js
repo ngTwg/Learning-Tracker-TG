@@ -128,7 +128,7 @@ async function loadVocabSummary() {
     const wrongContainer = document.getElementById('top-wrong-words');
     if (wrongContainer) {
       if (wrongWords.length === 0) {
-        wrongContainer.innerHTML = '<div class="empty-state">🎉 Chưa có từ nào sai!</div>';
+        wrongContainer.innerHTML = '<div class="empty-state"> Chưa có từ nào sai!</div>';
       } else {
         wrongContainer.innerHTML = wrongWords.map(word => `
           <div class="word-item">
@@ -243,10 +243,10 @@ function applyTheme(theme) {
 
   if (theme === 'light') {
     body.classList.add('light-theme');
-    if (themeIcon) themeIcon.textContent = '☀️';
+    if (themeIcon) themeIcon.textContent = '️';
   } else {
     body.classList.remove('light-theme');
-    if (themeIcon) themeIcon.textContent = '🌙';
+    if (themeIcon) themeIcon.textContent = '';
   }
 }
 
@@ -565,7 +565,7 @@ function setupVerbLookup() {
       <div style="margin-bottom: 4px;"><strong>V1:</strong> ${escapeHtml(lookup.base)}</div>
       <div style="margin-bottom: 4px;"><strong>V2:</strong> ${escapeHtml(lookup.past)}</div>
       <div style="margin-bottom: 4px;"><strong>V3:</strong> ${escapeHtml(lookup.participle)}</div>
-      <div style="color: var(--text-muted); font-size: 11px; margin-top: 6px;">💡 ${escapeHtml(sourceLabel)}</div>
+      <div style="color: var(--text-muted); font-size: 11px; margin-top: 6px;"> ${escapeHtml(sourceLabel)}</div>
     `;
   });
 }

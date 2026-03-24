@@ -152,12 +152,12 @@
     // Platform label
     let platformLabel = hostname;
     const labels = [
-      { key: 'facebook', label: '📘 Facebook' },
+      { key: 'facebook', label: ' Facebook' },
       { key: 'youtube', label: '▶️ YouTube' },
-      { key: 'spotify', label: '🎵 Spotify' },
-      { key: 'tiktok', label: '🎪 TikTok' },
-      { key: 'instagram', label: '📸 Instagram' },
-      { key: 'reddit', label: '🤖 Reddit' }
+      { key: 'spotify', label: ' Spotify' },
+      { key: 'tiktok', label: ' TikTok' },
+      { key: 'instagram', label: ' Instagram' },
+      { key: 'reddit', label: ' Reddit' }
     ];
     for (const l of labels) {
       if (hostname.includes(l.key)) { platformLabel = l.label; break; }
@@ -172,7 +172,7 @@
     // Header
     const header = document.createElement('div');
     header.className = 'tg-blocker-header';
-    header.innerHTML = `🛑 Vé Cầu Đường <span style="font-size:16px; opacity:0.85;">${platformLabel}</span>`;
+    header.innerHTML = ` Vé Cầu Đường <span style="font-size:16px; opacity:0.85;">${platformLabel}</span>`;
 
     // Subtitle with timer countdown
     const subtitle = document.createElement('div');
@@ -213,7 +213,7 @@
 
     const submitBtn = document.createElement('button');
     submitBtn.className = 'tg-vocab-submit';
-    submitBtn.textContent = '✓ Kiểm tra';
+    submitBtn.textContent = ' Kiểm tra';
 
     // Skip button (optional)
     let skipBtn = null;
@@ -278,7 +278,7 @@
           clearInterval(barTick);
           input.disabled = true;
           input.classList.add('tg-correct');
-          submitBtn.textContent = '🎉 Xuất sắc! Đang mở khóa...';
+          submitBtn.textContent = ' Xuất sắc! Đang mở khóa...';
           submitBtn.style.background = '#10b981';
           setTimeout(() => grantUnlock(), 900);
         } else {
@@ -291,7 +291,7 @@
         void input.offsetWidth;
         input.classList.add('tg-wrong');
         input.value = '';
-        input.placeholder = `❌ Sai! Đáp án: ${expected}`;
+        input.placeholder = ` Sai! Đáp án: ${expected}`;
       }
     }
 

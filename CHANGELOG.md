@@ -2,13 +2,13 @@
 
 ## Version 2.0 - Premium Modern Design
 
-### 🎨 Major UI Overhaul
+###  Major UI Overhaul
 
 #### Light/Dark Theme System
-- ✅ Fully functional theme toggle across all pages (Popup, Options, New Tab)
-- ✅ Smooth theme transitions with 0.3s easing
-- ✅ Theme preference saved to Chrome storage
-- ✅ Consistent color variables across light and dark modes
+-  Fully functional theme toggle across all pages (Popup, Options, New Tab)
+-  Smooth theme transitions with 0.3s easing
+-  Theme preference saved to Chrome storage
+-  Consistent color variables across light and dark modes
 
 #### Design Improvements
 
@@ -39,7 +39,7 @@
 - Better button interactions with scale and glow
 - Animated title with brightness pulse
 
-### 🎭 Animation & Effects
+###  Animation & Effects
 
 **Smooth Transitions**
 - Fast: 0.2s for quick interactions
@@ -66,7 +66,7 @@
 - Clock pulse with glow
 - Gradient movement for card borders
 
-### 🎯 Layout Improvements
+###  Layout Improvements
 
 **Better Organization**
 - Grouped related stats together
@@ -88,7 +88,7 @@
 - Warning: #fbbf24 (dark) / #f59e0b (light)
 - Info: #38bdf8 (dark) / #0ea5e9 (light)
 
-### 🔧 Technical Improvements
+###  Technical Improvements
 
 **CSS Architecture**
 - CSS custom properties for theming
@@ -108,19 +108,19 @@
 - Focus states for interactive elements
 - Reduced motion support (can be added)
 
-### 📱 Responsive Design
+###  Responsive Design
 - Mobile-optimized layouts
 - Flexible grid systems
 - Adaptive font sizes
 - Touch-friendly button sizes
 
-### 🐛 Bug Fixes
+###  Bug Fixes
 - Fixed theme not applying to options page (added body.classList)
 - Fixed theme persistence across pages
 - Improved scrollbar styling
 - Better overflow handling
 
-### 🚀 Next Steps (Recommendations)
+###  Next Steps (Recommendations)
 - Add prefers-reduced-motion support
 - Implement theme auto-detection from system
 - Add more micro-interactions

@@ -35,10 +35,10 @@ function applyTheme(theme) {
 
   if (theme === 'light') {
     body.classList.add('light-theme');
-    if (themeBtn) themeBtn.textContent = '☀️';
+    if (themeBtn) themeBtn.textContent = '️';
   } else {
     body.classList.remove('light-theme');
-    if (themeBtn) themeBtn.textContent = '🌙';
+    if (themeBtn) themeBtn.textContent = '';
   }
 }
 

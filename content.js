@@ -1038,27 +1038,27 @@
   // ── Signal Word Highlighter ────────────────────────────────────────
   const SIGNAL_WORDS = {
     // Present Perfect
-    'already': '⚡ Dấu hiệu Hiện tại hoàn thành\n"already" = đã/rồi\nCT: S + have/has + already + V3/ed',
-    'yet': '⚡ Dấu hiệu Hiện tại hoàn thành\n"yet" = chưa (câu phủ) / rồi chưa (câu hỏi)\nCT: S + haven\'t/hasn\'t + V3 + yet',
-    'since': '⚡ Dấu hiệu Hiện tại hoàn thành\n"since" = từ khi... (mốc thời gian)\nCT: S + have/has + V3 + since [time]',
-    'for': '⚡ Có thể là dấu hiệu HT hoàn thành\n"for" = trong khoảng (khoảng thời gian)\nCT: S + have/has + V3 + for [duration]',
-    'ever': '⚡ Dấu hiệu Hiện tại hoàn thành\n"ever" = đã từng (câu hỏi)\nCT: Have/Has + S + ever + V3?',
-    'never': '⚡ Dấu hiệu Hiện tại hoàn thành\n"never" = chưa từng bao giờ\nCT: S + have/has + never + V3',
-    'just': '⚡ Dấu hiệu Hiện tại hoàn thành\n"just" = vừa mới\nCT: S + have/has + just + V3',
-    'recently': '⚡ Dấu hiệu Hiện tại hoàn thành\n"recently" = gần đây\nCT: S + have/has + V3 + recently',
-    'lately': '⚡ Dấu hiệu Hiện tại hoàn thành\n"lately" = dạo gần đây\nCT: S + have/has + V3 + lately',
+    'already': ' Dấu hiệu Hiện tại hoàn thành\n"already" = đã/rồi\nCT: S + have/has + already + V3/ed',
+    'yet': ' Dấu hiệu Hiện tại hoàn thành\n"yet" = chưa (câu phủ) / rồi chưa (câu hỏi)\nCT: S + haven\'t/hasn\'t + V3 + yet',
+    'since': ' Dấu hiệu Hiện tại hoàn thành\n"since" = từ khi... (mốc thời gian)\nCT: S + have/has + V3 + since [time]',
+    'for': ' Có thể là dấu hiệu HT hoàn thành\n"for" = trong khoảng (khoảng thời gian)\nCT: S + have/has + V3 + for [duration]',
+    'ever': ' Dấu hiệu Hiện tại hoàn thành\n"ever" = đã từng (câu hỏi)\nCT: Have/Has + S + ever + V3?',
+    'never': ' Dấu hiệu Hiện tại hoàn thành\n"never" = chưa từng bao giờ\nCT: S + have/has + never + V3',
+    'just': ' Dấu hiệu Hiện tại hoàn thành\n"just" = vừa mới\nCT: S + have/has + just + V3',
+    'recently': ' Dấu hiệu Hiện tại hoàn thành\n"recently" = gần đây\nCT: S + have/has + V3 + recently',
+    'lately': ' Dấu hiệu Hiện tại hoàn thành\n"lately" = dạo gần đây\nCT: S + have/has + V3 + lately',
     // Past Simple
     'yesterday': '⏰ Dấu hiệu Quá khứ đơn\n"yesterday" = hôm qua\nCT: S + V2(past)',
     'ago': '⏰ Dấu hiệu Quá khứ đơn\n"ago" = ... trước\nCT: S + V2 + [time] + ago',
     'last': '⏰ Dấu hiệu Quá khứ đơn\n"last" year/week/night...\nCT: S + V2 + last [time]',
     // Future
-    'tomorrow': '🚀 Dấu hiệu Tương lai đơn\n"tomorrow" = ngày mai\nCT: S + will + V(bare)',
-    'soon': '🚀 Có thể là dấu hiệu Tương lai\n"soon" = sớm thôi\nCT: S + will + V(bare)',
+    'tomorrow': ' Dấu hiệu Tương lai đơn\n"tomorrow" = ngày mai\nCT: S + will + V(bare)',
+    'soon': ' Có thể là dấu hiệu Tương lai\n"soon" = sớm thôi\nCT: S + will + V(bare)',
     // Past Perfect
-    'by the time': '🔮 Dấu hiệu Quá khứ hoàn thành\n"by the time" = vào lúc...\nCT: By the time + PS, S + had + V3',
-    'before': '🔮 Có thể là dấu hiệu Quá khứ hoàn thành\nCT: S + had + V3 + before...',
-    'after': '🔮 Có thể là dấu hiệu Quá khứ hoàn thành\nCT: After + S + had + V3...',
-    'when': '🔮 Chú ý: "when" kết hợp với Quá khứ\nKiểm tra 2 vế câu để xác định thì',
+    'by the time': ' Dấu hiệu Quá khứ hoàn thành\n"by the time" = vào lúc...\nCT: By the time + PS, S + had + V3',
+    'before': ' Có thể là dấu hiệu Quá khứ hoàn thành\nCT: S + had + V3 + before...',
+    'after': ' Có thể là dấu hiệu Quá khứ hoàn thành\nCT: After + S + had + V3...',
+    'when': ' Chú ý: "when" kết hợp với Quá khứ\nKiểm tra 2 vế câu để xác định thì',
     // Present Continuous
     'now': '▶ Dấu hiệu Hiện tại tiếp diễn\n"now" = bây giờ (đang xảy ra)\nCT: S + am/is/are + V-ing',
     'currently': '▶ Dấu hiệu Hiện tại tiếp diễn\n"currently" = hiện tại đang\nCT: S + am/is/are + V-ing',
@@ -1249,9 +1249,9 @@
   }
 
   function extractSessionTitle() {
-    // Look for "📚 Bài tập về nhà - Buổi X" or similar
+    // Look for " Bài tập về nhà - Buổi X" or similar
     const allText = document.body ? document.body.innerText : '';
-    const match = allText.match(/(📚\s*)?Bài tập (về nhà|trên lớp)\s*-?\s*Buổi\s*\d+/i);
+    const match = allText.match(/(\s*)?Bài tập (về nhà|trên lớp)\s*-?\s*Buổi\s*\d+/i);
     if (match) return match[0].trim();
 
     // Look in sidebar
@@ -1376,7 +1376,7 @@
       // Show toast once per focus session
       if (!state.pacingWarned) {
         state.pacingWarned = true;
-        showToast("⚠️ Bạn đang mất quá nhiều thời gian cho câu này. Hãy dùng nút 'Tiếp' để làm câu dễ trước, lát quay lại sau!");
+        showToast("️ Bạn đang mất quá nhiều thời gian cho câu này. Hãy dùng nút 'Tiếp' để làm câu dễ trước, lát quay lại sau!");
       }
     } else {
       if (elapsedEl) {
@@ -2133,9 +2133,9 @@
         </div>
 
         <div class="tg-hud-row tg-stats">
-          <span class="tg-correct" title="Đúng">✓ <span id="tg-correct-count">0</span></span>
-          <span class="tg-wrong" title="Sai">✗ <span id="tg-wrong-count">0</span></span>
-          <span class="tg-neutral">🎯 <span id="tg-accuracy">0%</span></span>
+          <span class="tg-correct" title="Đúng"> <span id="tg-correct-count">0</span></span>
+          <span class="tg-wrong" title="Sai"> <span id="tg-wrong-count">0</span></span>
+          <span class="tg-neutral"> <span id="tg-accuracy">0%</span></span>
           <span class="tg-neutral">⏱ <span id="tg-elapsed">00:00</span></span>
         </div>
 
@@ -2149,28 +2149,28 @@
             <div>Đến hạn ôn</div>
             <div id="tg-due-count" class="tg-goal-sub">0 từ</div>
           </div>
-          <div id="tg-mascot" title="Thú ảo học tập" style="font-size:28px; cursor:pointer; margin-left:auto; animation: bounce 2s infinite;" class="tg-mascot">🐱</div>
+          <div id="tg-mascot" title="Thú ảo học tập" style="font-size:28px; cursor:pointer; margin-left:auto; animation: bounce 2s infinite;" class="tg-mascot"></div>
         </div>
 
         <div class="tg-hud-row tg-errors">
-          <span class="tg-error-chip">📝 <span id="tg-err-spelling">0</span></span>
-          <span class="tg-error-chip">🔤 <span id="tg-err-form">0</span></span>
+          <span class="tg-error-chip"> <span id="tg-err-spelling">0</span></span>
+          <span class="tg-error-chip"> <span id="tg-err-form">0</span></span>
           <span class="tg-error-chip">␣ <span id="tg-err-spacing">0</span></span>
-          <span class="tg-error-chip">❓ <span id="tg-err-meaning">0</span></span>
+          <span class="tg-error-chip"> <span id="tg-err-meaning">0</span></span>
         </div>
         <div id="tg-last-error" class="tg-last-error" style="display:flex; justify-content: space-between; align-items: center;">
           <span id="tg-last-error-text"></span>
-          <button id="tg-btn-ask-ai" class="tg-mini-btn" style="display:none; padding: 2px 6px;" title="Hỏi AI tại sao sai">✨ Hỏi AI</button>
+          <button id="tg-btn-ask-ai" class="tg-mini-btn" style="display:none; padding: 2px 6px;" title="Hỏi AI tại sao sai"> Hỏi AI</button>
         </div>
         <div id="tg-ai-explanation" class="tg-ai-explanation" style="display:none; font-size: 13px; line-height: 1.5; color: #f1f5f9; margin-top: 8px; padding: 10px 12px; background: rgba(30, 41, 59, 0.95); border-left: 3px solid #a855f7; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);"></div>
 
         <div class="tg-hud-row tg-actions">
-          <button class="tg-action-btn" id="tg-btn-pomodoro">🍅 Pomodoro 25:00</button>
+          <button class="tg-action-btn" id="tg-btn-pomodoro"> Pomodoro 25:00</button>
           <button class="tg-action-btn" id="tg-btn-add-review">+ Ôn tập</button>
-          <button class="tg-action-btn" id="tg-btn-mark-hard">★ Khó</button>
+          <button class="tg-action-btn" id="tg-btn-mark-hard"> Khó</button>
           <button class="tg-action-btn" id="tg-btn-quick5">Ôn nhanh 5</button>
           <button class="tg-action-btn" id="tg-btn-review-3m">Ôn 3 phút</button>
-          <button class="tg-action-btn highlight-verb-btn" id="tg-btn-irregular">🔍 Tra Động Từ</button>
+          <button class="tg-action-btn highlight-verb-btn" id="tg-btn-irregular"> Tra Động Từ</button>
           <button class="tg-action-btn" id="tg-btn-fullscreen">Toàn màn hình</button>
           <button class="tg-action-btn" id="tg-btn-focus">Focus: Tắt</button>
         </div>
@@ -2185,7 +2185,7 @@
         </div>
 
         <div id="tg-selector-warning" class="tg-selector-warning" style="display:none;">
-          ⚠️ Có thể selector đã thay đổi, tracking có thể thiếu dữ liệu.
+          ️ Có thể selector đã thay đổi, tracking có thể thiếu dữ liệu.
         </div>
       </div>
     `;
@@ -2390,35 +2390,35 @@
       const streak = state.sessionCorrect - state.sessionWrong;
       const streakScale = Math.min(2.0, 1.0 + (streak > 0 ? streak * 0.08 : 0));
       
-      let emoji = '🐣'; // Default: hatching
+      let emoji = ''; // Default: hatching
       let titleText = 'Thú ảo của bạn đang chờ...';
       
       if (state.goalProgressPct >= 100) {
-        emoji = '🦁';  // Goal complete: mighty lion
-        titleText = 'MÃO! Bạn đã đạt mục tiêu hôm nay! 🎉';
+        emoji = '';  // Goal complete: mighty lion
+        titleText = 'MÃO! Bạn đã đạt mục tiêu hôm nay! ';
       } else if (streak >= 10) {
-        emoji = '🔥🐉🔥'; // Epic fire dragon
+        emoji = ''; // Epic fire dragon
         titleText = `Chuỗi ${streak} đúng liên tiếp! Rồng lửa hiển linh!`;
       } else if (streak >= 5) {
-        emoji = '🦄';   // Unicorn
+        emoji = '';   // Unicorn
         titleText = `Streak ${streak}! Kỳ lân thức giấc!`;
       } else if (streak >= 3) {
-        emoji = '🐯';  // Tiger
+        emoji = '';  // Tiger
         titleText = `Streak ${streak}! Hổ con đang hứng!`;
       } else if (state.sessionWrong > 5 && state.sessionCorrect === 0) {
-        emoji = '😭';  // Crying
+        emoji = '';  // Crying
         titleText = 'Ôi, sai nhiều quá! Cố lên bạn ơi!';
       } else if (state.sessionWrong > state.sessionCorrect && state.sessionWrong > 0) {
-        emoji = '😓';  // Sweating
+        emoji = '';  // Sweating
         titleText = 'Đang vất vả nhưng đừng bỏ cuộc!';
       } else if (state.sessionCorrect > state.sessionWrong && state.sessionCorrect > 0) {
-        emoji = '😸';  // Happy cat
+        emoji = '';  // Happy cat
         titleText = 'Làm tốt lắm! Tiếp tục đi!';
       } else if (state.todayAttempts === 0) {
-        emoji = '😴';  // Sleeping - no activity today
+        emoji = '';  // Sleeping - no activity today
         titleText = 'Thú ảo đang ngủ... Hãy bắt đầu học để đánh thức nó!';
       } else {
-        emoji = '🐱';  // Normal cat
+        emoji = '';  // Normal cat
         titleText = 'Thú ảo đang theo dõi bạn...';
       }
       
@@ -2747,7 +2747,7 @@
     }, (response) => {
       if (btn) {
         btn.disabled = false;
-        btn.textContent = '✨ Hỏi AI';
+        btn.textContent = ' Hỏi AI';
         btn.style.display = 'none'; // hide after asking successfully to prevent spam
       }
       

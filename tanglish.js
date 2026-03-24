@@ -199,12 +199,12 @@
     `;
     toast.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:16px;">🌐</span>
+        <span style="font-size:16px;"></span>
         <div>
           <div style="font-weight:700;">Tanglish Mode đang bật</div>
           <div style="color:#94a3b8;font-size:11px;">Từ vựng đã học được highlight. Hover để xem tiếng Việt.</div>
         </div>
-        <span style="color:#475569;margin-left:8px;cursor:pointer;" id="tg-tanglish-close">✕</span>
+        <span style="color:#475569;margin-left:8px;cursor:pointer;" id="tg-tanglish-close"></span>
       </div>
     `;
     document.body.appendChild(toast);

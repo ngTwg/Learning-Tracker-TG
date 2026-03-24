@@ -43,11 +43,11 @@ function applyTheme(theme) {
   if (theme === 'light') {
     html.classList.add('light-theme');
     body.classList.add('light-theme');
-    if (themeIcon) themeIcon.textContent = '☀️';
+    if (themeIcon) themeIcon.textContent = '️';
   } else {
     html.classList.remove('light-theme');
     body.classList.remove('light-theme');
-    if (themeIcon) themeIcon.textContent = '🌙';
+    if (themeIcon) themeIcon.textContent = '';
   }
 }
 
@@ -367,7 +367,7 @@ function renderVocabTable() {
         <td style="color:var(--accent-green)">${entry.correctAttempts || 0}</td>
         <td style="color:var(--accent-red)">${entry.wrongAttempts || 0}</td>
         <td>${entry.avgAttemptsBeforeCorrect || '-'}</td>
-        <td>${entry.streakCorrect || 0} 🔥</td>
+        <td>${entry.streakCorrect || 0} </td>
         <td><span class="badge ${masteryClass}">${masteryLabel}</span></td>
         <td style="color:var(--text-muted)">${lastSeen}</td>
       </tr>
@@ -422,9 +422,9 @@ function renderWrongInputs() {
   const inReview = entries.filter(e => e.inReviewList).length;
   if (summaryEl) {
     summaryEl.innerHTML = [
-      `<span class="wi-stat-chip">❌ ${totalWords} từ từng sai</span>`,
-      `<span class="wi-stat-chip">📋 ${totalWrongInstances} lần sai tổng</span>`,
-      `<span class="wi-stat-chip" style="color:var(--accent-yellow)">🔁 ${inReview} từ đang ôn</span>`
+      `<span class="wi-stat-chip"> ${totalWords} từ từng sai</span>`,
+      `<span class="wi-stat-chip"> ${totalWrongInstances} lần sai tổng</span>`,
+      `<span class="wi-stat-chip" style="color:var(--accent-yellow)"> ${inReview} từ đang ôn</span>`
     ].join('');
   }
 
@@ -475,10 +475,10 @@ function renderWrongInputs() {
 
     const viEncoded = encodeURIComponent(entry.vietnamese || '');
     const inReviewBtn = isInReview
-      ? `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" data-act="removeFromReview" data-vi="${viEncoded}">✓ Đang ôn tập</button>`
+      ? `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" data-act="removeFromReview" data-vi="${viEncoded}"> Đang ôn tập</button>`
       : `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px" data-act="addToReview" data-vi="${viEncoded}">+ Thêm vào ôn tập</button>`;
 
-    const reviewBadge = isInReview ? `<span class="wi-review-badge">🔁</span>` : '';
+    const reviewBadge = isInReview ? `<span class="wi-review-badge"></span>` : '';
 
     return `
       <div class="wi-card" id="wi-card-${btoa(encodeURIComponent(entry.vietnamese || '')).slice(0, 10)}">
@@ -495,7 +495,7 @@ function renderWrongInputs() {
             </div>
           </div>
           <div class="wi-card-right">
-            <span class="wi-wrong-count">✗ ${entry.wrongAttempts || 0} lần</span>
+            <span class="wi-wrong-count"> ${entry.wrongAttempts || 0} lần</span>
             <span class="wi-chevron">▼</span>
           </div>
         </div>
@@ -503,7 +503,7 @@ function renderWrongInputs() {
           <div class="wi-attempts-title">Lịch sử từng lần gõ sai (${history.length} lần)</div>
           <div class="wi-card-actions">
             ${inReviewBtn}
-            <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px; margin-left:8px;" data-act="genMnemonic" data-vi="${viEncoded}" data-en="${encodeURIComponent(entry.english || '?')}">💡 Tạo Mẹo Nhớ</button>
+            <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px; margin-left:8px;" data-act="genMnemonic" data-vi="${viEncoded}" data-en="${encodeURIComponent(entry.english || '?')}"> Tạo Mẹo Nhớ</button>
             <div class="mnemonic-result" style="display:none; margin-top:10px; padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; font-style:italic; font-size:13px; width:100%; text-align:left;"></div>
           </div>
         </div>
@@ -541,7 +541,7 @@ window.generateMnemonic = async function (viEncoded, enEncoded, btn) {
     wordOrContext: prompt
   }, (response) => {
     btn.disabled = false;
-    btn.textContent = '💡 Tạo mẹo khác';
+    btn.textContent = ' Tạo mẹo khác';
     if (!response || response.error) {
       resultDiv.textContent = 'Phản hồi thất bại từ AI: ' + (response?.error || 'Unknown Error');
     } else {
@@ -910,7 +910,7 @@ function renderRvCard() {
 
 
   const wrongBadge = document.getElementById('fc-wrong-count');
-  if (wrongBadge) wrongBadge.textContent = word.wrongAttempts > 0 ? `✗ đã sai ${word.wrongAttempts} lần` : '';
+  if (wrongBadge) wrongBadge.textContent = word.wrongAttempts > 0 ? ` đã sai ${word.wrongAttempts} lần` : '';
 
   // Reset hint and feedback
   const hintEl = document.getElementById('fc-hint');
@@ -930,7 +930,7 @@ function renderRvCard() {
     const inp = document.getElementById('fc-input');
     if (inp) { inp.value = ''; inp.className = 'fc-input'; inp.disabled = false; setTimeout(() => inp.focus(), 80); }
     const cb = document.getElementById('fc-check');
-    if (cb) { cb.textContent = '✓ Kiểm tra'; cb.onclick = checkRvTypeAnswer; }
+    if (cb) { cb.textContent = ' Kiểm tra'; cb.onclick = checkRvTypeAnswer; }
 
   } else if (rvSettings.mode === 'choice4') {
     if (choiceArea) choiceArea.style.display = '';
@@ -982,7 +982,7 @@ function checkRvTypeAnswer() {
     const ipaStr = (direction === 'vi-en' && word.ipa) ? `<span style="font-style:italic;color:var(--text-muted);margin-left:8px;font-weight:normal;">/${escapeHtml(word.ipa)}/</span>` : '';
     input.classList.add('fc-correct');
     feedback.className = 'fc-feedback correct-fb';
-    feedback.innerHTML = `✅ Chính xác! <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
+    feedback.innerHTML = ` Chính xác! <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
     feedback.style.display = 'block';
     rvSessionStats.correct++;
     if (!rvDoneIdx.has(rvCurIdx)) rvDoneIdx.add(rvCurIdx);
@@ -1002,7 +1002,7 @@ function checkRvTypeAnswer() {
     const ipaStr = (direction === 'vi-en' && word.ipa) ? `<span style="font-style:italic;color:var(--text-muted);margin-left:8px;font-weight:normal;">/${escapeHtml(word.ipa)}/</span>` : '';
     input.classList.add('fc-wrong');
     feedback.className = 'fc-feedback wrong-fb';
-    feedback.innerHTML = `❌ Sai! Đáp án: <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
+    feedback.innerHTML = ` Sai! Đáp án: <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
     feedback.style.display = 'block';
     rvSessionStats.wrong++;
     if (!rvQueue[rvCurIdx].graded) {
@@ -1018,7 +1018,7 @@ function checkRvTypeAnswer() {
         input.className = 'fc-input';
         input.disabled = false;
         feedback.style.display = 'none';
-        cb.textContent = '✓ Kiểm tra';
+        cb.textContent = ' Kiểm tra';
         cb.onclick = checkRvTypeAnswer;
         input.focus();
       };
@@ -1086,7 +1086,7 @@ window.handleChoice4 = function (selected, correct) {
 
     if (feedback) {
       feedback.className = 'fc-feedback correct-fb';
-      feedback.innerHTML = `✅ Chính xác! <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
+      feedback.innerHTML = ` Chính xác! <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
       feedback.style.display = 'block';
     }
   } else {
@@ -1098,7 +1098,7 @@ window.handleChoice4 = function (selected, correct) {
 
     if (feedback) {
       feedback.className = 'fc-feedback wrong-fb';
-      feedback.innerHTML = `❌ Sai! Đáp án: <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
+      feedback.innerHTML = ` Sai! Đáp án: <span class="fc-correct-word">${escapeHtml(correctRaw || '')}</span>${ipaStr}`;
       feedback.style.display = 'block';
     }
   }
@@ -1416,7 +1416,7 @@ async function loadWeaknessTab() {
         <div class="weakness-word-title">${escapeHtml(item.vietnamese)} → ${escapeHtml(item.english)}</div>
         <div class="weakness-word-sub">Lỗi chính: ${escapeHtml(item.dominantType)}</div>
       </div>
-      <div class="event-result wrong">✗ ${item.wrongAttempts}</div>
+      <div class="event-result wrong"> ${item.wrongAttempts}</div>
     </div>
   `).join('');
 
@@ -1483,7 +1483,7 @@ async function loadOfflineTab() {
   const totalVocab = Object.keys(vocabRes?.data || {}).length;
   const statsEl = document.getElementById('offline-stats');
   if (statsEl) {
-    statsEl.textContent = `📌 ${dueCount} từ đến hạn ôn | 📚 ${totalVocab} từ có sẵn cho chế độ tự học`;
+    statsEl.textContent = ` ${dueCount} từ đến hạn ôn |  ${totalVocab} từ có sẵn cho chế độ tự học`;
   }
 
   bindClickOnce('btn-offline-start-20', async () => {
@@ -1601,9 +1601,9 @@ function renderSessions() {
           </div>
         </div>
         <div class="session-card-footer">
-          <span>📅 ${datesCount} ngày</span>
-          <span>🔄 ${session.attempts || 0} lượt</span>
-          <span>🕐 ${lastDate}</span>
+          <span> ${datesCount} ngày</span>
+          <span> ${session.attempts || 0} lượt</span>
+          <span> ${lastDate}</span>
         </div>
       </div>
     `;
@@ -1664,16 +1664,16 @@ function renderHistoryEvents() {
   if (!container) return;
 
   const icons = {
-    answer_result: '📝',
+    answer_result: '',
     answer_attempt: '⌨️',
-    submit_click: '🔘',
-    lesson_open: '📖',
-    lesson_close: '🚪',
-    mode_switch: '🔄',
-    round_switch: '🔁',
-    score_detected: '🏆',
-    exam_fullscreen_exit: '🖥️',
-    exam_lock_violation: '⛔'
+    submit_click: '',
+    lesson_open: '',
+    lesson_close: '',
+    mode_switch: '',
+    round_switch: '',
+    score_detected: '',
+    exam_fullscreen_exit: '️',
+    exam_lock_violation: ''
   };
 
   const examLockNotifyByTab = new Map(); // tabId -> timestamp
@@ -1681,7 +1681,7 @@ function renderHistoryEvents() {
   let hideGrammarHints = false;
 
   container.innerHTML = pageEvents.map(event => {
-    const icon = icons[event.type] || '📌';
+    const icon = icons[event.type] || '';
     const time = new Date(event.timestamp).toLocaleTimeString('vi-VN', {
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
@@ -1694,7 +1694,7 @@ function renderHistoryEvents() {
       title = event.data.vietnamese || 'Trả lời';
       detail = `Nhập: "${escapeHtml(event.data.userInput || '')}" | Đúng: ${escapeHtml(event.data.english || event.data.correctAnswer || '?')}`;
       const isCorrect = event.data.isCorrect;
-      resultHtml = `<span class="event-result ${isCorrect ? 'correct' : 'wrong'}">${isCorrect ? '✓' : '✗'}</span>`;
+      resultHtml = `<span class="event-result ${isCorrect ? 'correct' : 'wrong'}">${isCorrect ? '' : ''}</span>`;
     } else if (event.type === 'submit_click' && event.data) {
       title = `Bấm: ${event.data.buttonText || 'Button'}`;
       detail = `Đúng: ${event.data.sessionCorrect || 0} | Sai: ${event.data.sessionWrong || 0}`;
@@ -1790,7 +1790,7 @@ async function loadSettingsTab() {
     const vocabCount = Object.keys(vocabRes?.data || {}).length;
     const sessionCount = Object.keys(sessionRes?.data || {}).length;
 
-    statsEl.textContent = `📊 ${eventsCount} events | 📝 ${vocabCount} từ vựng | 📅 ${sessionCount} phiên học`;
+    statsEl.textContent = ` ${eventsCount} events |  ${vocabCount} từ vựng |  ${sessionCount} phiên học`;
   }
 
   // ── Load Toll-booth Settings ─────────────────────────────────────────────────
@@ -1858,7 +1858,7 @@ function setupSettingsActions() {
         action: 'update_settings',
         settings: { aiKey: aiKeyInput.value.trim() }
       });
-      btnSaveAiKey.textContent = 'Đã lưu ✓';
+      btnSaveAiKey.textContent = 'Đã lưu ';
       setTimeout(() => btnSaveAiKey.textContent = 'Lưu Key', 2000);
     });
   }
@@ -2049,10 +2049,10 @@ function setupSettingsActions() {
   const btnClear = document.getElementById('btn-clear-data');
   if (btnClear) {
     btnClear.addEventListener('click', async () => {
-      if (confirm('⚠️ Bạn có chắc muốn XÓA TOÀN BỘ dữ liệu? Hành động này không thể hoàn tác!')) {
+      if (confirm('️ Bạn có chắc muốn XÓA TOÀN BỘ dữ liệu? Hành động này không thể hoàn tác!')) {
         if (confirm('Xác nhận lần cuối: XÓA TẤT CẢ dữ liệu tracking?')) {
           await sendMessage({ action: 'clear_data' });
-          alert('✅ Đã xóa toàn bộ dữ liệu.');
+          alert(' Đã xóa toàn bộ dữ liệu.');
           location.reload();
         }
       }
@@ -2366,7 +2366,7 @@ async function startDungeon() {
 function renderVdHud() {
   const hpBar = document.getElementById('vd-hp-bar');
   if (hpBar) {
-    hpBar.innerHTML = Array(3).fill('🖤').map((heart, i) => i < vdState.hp ? '❤️' : '🖤').join('');
+    hpBar.innerHTML = Array(3).fill('').map((heart, i) => i < vdState.hp ? '️' : '').join('');
   }
   const floorEl = document.getElementById('vd-floor');
   if (floorEl) {
@@ -2401,7 +2401,7 @@ function nextVdFloor() {
 
   const monster = document.getElementById('vd-monster');
   if (monster) {
-    const emojis = ['👿', '👹', '👺', '👾', '🧟', '🧛', '🐲', '☠️'];
+    const emojis = ['', '', '', '', '', '', '', '️'];
     monster.textContent = emojis[Math.floor(Math.random() * emojis.length)];
     monster.style.transform = 'translateY(0) scale(1)';
     monster.style.opacity = '1';
@@ -2544,7 +2544,7 @@ function endDungeon(isWin) {
   if (layer) {
     layer.innerHTML = `
       <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; flex-direction: column; align-items: center; justify-content: center;">
-        <div style="font-size: 80px; margin-bottom: 20px;">${isWin ? '🏆' : '💀'}</div>
+        <div style="font-size: 80px; margin-bottom: 20px;">${isWin ? '' : ''}</div>
         <div style="font-size: 32px; font-weight: 800; color: ${isWin ? '#fbbf24' : '#ef4444'}; margin-bottom: 20px;">
           ${isWin ? 'CHINH PHỤC HẦM NGỤC!' : 'GAMEOVER'}
         </div>
@@ -2698,12 +2698,12 @@ async function loadGrammarVaultTab() {
       <div class="wi-card" style="margin-bottom:12px;">
         <div style="padding:20px;">
           <div style="font-size:12px;color:#475569;margin-bottom:10px;display:flex;justify-content:space-between;">
-            <span>📚 ${escapeHtml(item.context || 'Exam')}</span>
-            <span style="color:#334155;cursor:pointer;" data-act="rmGvItem" data-idx="${idx}">✕</span>
+            <span> ${escapeHtml(item.context || 'Exam')}</span>
+            <span style="color:#334155;cursor:pointer;" data-act="rmGvItem" data-idx="${idx}"></span>
           </div>
           <div style="font-size:18px;line-height:2.5;font-family:Georgia,serif;">${sentenceHtml}</div>
           <div style="margin-top:16px;display:flex;gap:10px;align-items:center;">
-            <button class="btn btn-primary" style="font-size:13px;" data-act="chkGvAnswer" data-idx="${idx}" data-ans="${encodeURIComponent(item.answer || '')}">✓ Kiểm tra</button>
+            <button class="btn btn-primary" style="font-size:13px;" data-act="chkGvAnswer" data-idx="${idx}" data-ans="${encodeURIComponent(item.answer || '')}"> Kiểm tra</button>
             <span id="gv-feedback-${idx}" style="font-size:13px;"></span>
           </div>
           <div style="margin-top:8px;font-size:12px;color:#334155;">Gợi ý: ${Array.from(item.answer || '').map((c, i) => i === 0 ? c : (c === ' ' ? ' ' : '_')).join('')}</div>
@@ -2720,11 +2720,11 @@ window.checkGvAnswer = function (idx, encodedAnswer) {
   const typed = input.value.toLowerCase().trim();
   const isCorrect = typed === correct || typed.replace(/\s+/g, ' ') === correct.replace(/\s+/g, ' ');
   if (isCorrect) {
-    feedback.innerHTML = `<span style="color:#10b981">✓ Đúng rồi! "${escapeHtml(decodeURIComponent(encodedAnswer))}"</span>`;
+    feedback.innerHTML = `<span style="color:#10b981"> Đúng rồi! "${escapeHtml(decodeURIComponent(encodedAnswer))}"</span>`;
     input.style.borderColor = '#10b981';
     if (typeof fireConfetti === 'function') fireConfetti();
   } else {
-    feedback.innerHTML = `<span style="color:#ef4444">✗ Sai! Đáp án: "${escapeHtml(decodeURIComponent(encodedAnswer))}"</span>`;
+    feedback.innerHTML = `<span style="color:#ef4444"> Sai! Đáp án: "${escapeHtml(decodeURIComponent(encodedAnswer))}"</span>`;
     input.style.borderColor = '#ef4444';
     input.classList.remove('shake'); void input.offsetWidth; input.classList.add('shake');
   }
@@ -2785,14 +2785,14 @@ async function loadSkillMatrixTab() {
   if (conclusionEl) {
     const lines = [];
     if (totalAttempts < 10) {
-      lines.push('📊 Chưa có đủ dữ liệu để phân tích. Hãy cài đặt và làm bài tập trên ThayGiap để extension thu thập thông tin.');
+      lines.push(' Chưa có đủ dữ liệu để phân tích. Hãy cài đặt và làm bài tập trên ThayGiap để extension thu thập thông tin.');
     } else {
-      if (vocabAccuracy >= 80) lines.push(`✅ <strong>Từ vựng:</strong> Xuất sắc! Bạn đúng <strong>${vocabAccuracy}%</strong> lần nhập từ vựng.`);
-      else if (vocabAccuracy >= 60) lines.push(`⚠️ <strong>Từ vựng:</strong> Trung bình — ${vocabAccuracy}% đúng. Nên ôn lại qua tab "Lỗi nhập".`);
-      else lines.push(`❌ <strong>Từ vựng:</strong> Cần cải thiện — chỉ đúng ${vocabAccuracy}%. Hãy dùng Vocab Dungeon để luyện.`);
+      if (vocabAccuracy >= 80) lines.push(` <strong>Từ vựng:</strong> Xuất sắc! Bạn đúng <strong>${vocabAccuracy}%</strong> lần nhập từ vựng.`);
+      else if (vocabAccuracy >= 60) lines.push(`️ <strong>Từ vựng:</strong> Trung bình — ${vocabAccuracy}% đúng. Nên ôn lại qua tab "Lỗi nhập".`);
+      else lines.push(` <strong>Từ vựng:</strong> Cần cải thiện — chỉ đúng ${vocabAccuracy}%. Hãy dùng Vocab Dungeon để luyện.`);
 
-      if (formPct > 30) lines.push(`🔴 <strong>Lỗi nổi bật:</strong> ${formPct}% lỗi do CHIA DẠNG TỪ. Bạn thường hiểu nghĩa nhưng điền sai dạng từ (ví dụ: dùng quy tắc cho động từ bất quy tắc).`);
-      if (meaningPct > 30) lines.push(`🟡 <strong>Lỗi nổi bật:</strong> ${meaningPct}% lỗi do SAI Ý NGHĨA — có thể nhầm từ hoặc không hiểu nội dung câu hỏi.`);
+      if (formPct > 30) lines.push(` <strong>Lỗi nổi bật:</strong> ${formPct}% lỗi do CHIA DẠNG TỪ. Bạn thường hiểu nghĩa nhưng điền sai dạng từ (ví dụ: dùng quy tắc cho động từ bất quy tắc).`);
+      if (meaningPct > 30) lines.push(` <strong>Lỗi nổi bật:</strong> ${meaningPct}% lỗi do SAI Ý NGHĨA — có thể nhầm từ hoặc không hiểu nội dung câu hỏi.`);
     }
     conclusionEl.innerHTML = lines.join('<br><br>') || 'Dữ liệu đang được phân tích...';
   }
@@ -2808,10 +2808,10 @@ async function loadSkillMatrixTab() {
       btn.onclick = () => { location.hash = hash; };
       ctaEl.appendChild(btn);
     };
-    if (formPct > 20) addBtn('⚔️ Luyện động từ bất quy tắc', 'offline', 'btn-primary');
-    if (vocabAccuracy < 75) addBtn('🔁 Ôn tập từ vựng sai', 'wrong-inputs');
-    addBtn('🧩 Kho Ngữ Pháp', 'grammar-vault');
-    addBtn('✍️ Lò rèn Câu', 'sentence-forge');
+    if (formPct > 20) addBtn('️ Luyện động từ bất quy tắc', 'offline', 'btn-primary');
+    if (vocabAccuracy < 75) addBtn(' Ôn tập từ vựng sai', 'wrong-inputs');
+    addBtn(' Kho Ngữ Pháp', 'grammar-vault');
+    addBtn('️ Lò rèn Câu', 'sentence-forge');
   }
 
   // Top 5 hardest words
@@ -2840,7 +2840,7 @@ async function loadSkillMatrixTab() {
               </div>
               <div style="margin-top:4px;font-size:12px;color:var(--text-secondary);">${e.wrongAttempts} lần sai / ${e.totalAttempts} lần tổng (${wrongPct}% sai)</div>
             </div>
-            <button class="btn btn-secondary" style="font-size:12px;white-space:nowrap;" data-act="genMnemonic" data-vi="${viEnc}" data-en="${enEnc}">💡 Mẹo</button>
+            <button class="btn btn-secondary" style="font-size:12px;white-space:nowrap;" data-act="genMnemonic" data-vi="${viEnc}" data-en="${enEnc}"> Mẹo</button>
           </div>`;
       }).join('');
     }
@@ -2861,7 +2861,7 @@ function renderTollDomainsList() {
   container.innerHTML = domains.map(d => `
     <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); border:1px solid var(--border-color); padding:10px 14px; border-radius:var(--radius-md);">
       <div style="display:flex; align-items:center; gap:8px;">
-        <span style="font-size:16px;">🌐</span>
+        <span style="font-size:16px;"></span>
         <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${escapeHtml(d)}</span>
       </div>
       <button class="btn-remove-domain" data-domain="${escapeHtml(d)}" style="background:transparent; border:none; color:var(--accent-danger); cursor:pointer; font-size:18px; line-height:1; display:flex; align-items:center; justify-content:center; padding:4px; border-radius:4px; transition:background 0.2s;">×</button>
@@ -2925,7 +2925,7 @@ document.addEventListener('click', (e) => {
 // ============ Kho Ngữ Pháp (Grammar Vault) Logic ============
 document.addEventListener('DOMContentLoaded', () => {
   const tensesHTML = `
-    <h3 style="margin-bottom:15px; color:var(--text-primary);">📚 Nhắc lại 12 Thì Cơ Bản</h3>
+    <h3 style="margin-bottom:15px; color:var(--text-primary);"> Nhắc lại 12 Thì Cơ Bản</h3>
     <div style="overflow-x:auto;">
       <table style="width:100%; text-align:left; border-collapse:collapse; background:rgba(255,255,255,0.05); border-radius:8px; overflow:hidden;">
         <tr style="border-bottom: 2px solid var(--border-color); background:rgba(0,0,0,0.2);">
@@ -2952,7 +2952,7 @@ document.addEventListener('DOMContentLoaded', () => {
   `;
 
   const signsHTML = `
-    <h3 style="margin-bottom:15px; color:var(--text-primary);">🔍 Các Dấu Hiệu Nhận Biết Thì</h3>
+    <h3 style="margin-bottom:15px; color:var(--text-primary);"> Các Dấu Hiệu Nhận Biết Thì</h3>
     <ul style="line-height:2.2; color:var(--text-secondary); font-size:15px;">
       <li><strong style="color:var(--accent-blue);">Hiện tại đơn:</strong> always, usually, often, everyday, sometimes, never...</li>
       <li><strong style="color:var(--accent-green);">Hiện tại tiếp diễn:</strong> now, right now, at the moment, look!, listen!...</li>
@@ -2970,13 +2970,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const practiceHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
-      <h3 style="margin:0; color:var(--text-primary);">⚔️ Ôn tập Thì & Dấu hiệu</h3>
+      <h3 style="margin:0; color:var(--text-primary);">️ Ôn tập Thì & Dấu hiệu</h3>
       <div style="display:flex; gap:10px; align-items:center;">
         <label class="toggle-switch" style="font-size:13px; color:var(--text-secondary); display:flex; align-items:center; gap:8px; cursor:pointer;">
           <input type="checkbox" id="gv-practice-hide-hints" ${hideGrammarHints ? 'checked' : ''}>
           <span>Ẩn gợi ý</span>
         </label>
-        <button id="btn-gv-shuffle-practice" class="btn btn-primary" style="padding:6px 12px; font-size:13px; background:var(--gradient-primary);">🎲 Ôn tập ngẫu nhiên</button>
+        <button id="btn-gv-shuffle-practice" class="btn btn-primary" style="padding:6px 12px; font-size:13px; background:var(--gradient-primary);"> Ôn tập ngẫu nhiên</button>
         <button id="btn-gv-refresh-practice" class="btn btn-secondary" style="padding:6px 12px; font-size:13px;">Làm mới</button>
       </div>
     </div>
@@ -2984,7 +2984,7 @@ document.addEventListener('DOMContentLoaded', () => {
   `;
 
   const aiGenHTML = `
-    <h3 style="margin-bottom:15px; color:var(--text-primary);">✨ Tự động tạo câu bằng AI</h3>
+    <h3 style="margin-bottom:15px; color:var(--text-primary);"> Tự động tạo câu bằng AI</h3>
     <div style="margin-top:10px;">
       <p style="color:var(--text-secondary); margin-bottom:12px;">Chọn các tùy chọn bên dưới để AI tự động tạo ra mẫu câu riêng kèm nhắc lại cấu trúc:</p>
       
@@ -3027,7 +3027,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
 
       <div id="gv-ai-usage-bar" style="margin-top:14px; padding:10px 14px; background:var(--bg-card); border-radius:10px; border:1px solid var(--border-color); font-size:13px; display:flex; flex-wrap:wrap; align-items:center; gap:12px;">
-        <span style="font-weight:600; color:var(--text-secondary);">📊 Hôm nay:</span>
+        <span style="font-weight:600; color:var(--text-secondary);"> Hôm nay:</span>
         <span id="gv-usage-requests" style="color:var(--accent-blue);">Yêu cầu: 0/20</span>
         <span style="color:var(--border-color);">|</span>
         <span id="gv-usage-tokens" style="color:var(--accent-purple);">Token: 0 / 250,000</span>
@@ -3038,7 +3038,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
 
       <div id="gv-ai-save-all-container" style="margin-top:14px; display:none; justify-content: flex-end;">
-        <button id="gv-btn-ai-save-all" class="btn btn-success" style="padding:8px 16px; font-size:14px; background:linear-gradient(135deg, #10b981, #059669);">💾 Lưu toàn bộ câu này vào kho</button>
+        <button id="gv-btn-ai-save-all" class="btn btn-success" style="padding:8px 16px; font-size:14px; background:linear-gradient(135deg, #10b981, #059669);"> Lưu toàn bộ câu này vào kho</button>
       </div>
 
       <div id="gv-ai-result" style="margin-top:14px; padding:18px; background:var(--bg-secondary); border-radius:12px; display:none; color:var(--text-primary); line-height:1.6; border-left:4px solid var(--accent-purple); box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-size:15px;"></div>
@@ -3132,9 +3132,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${sent} ${badge}
               </div>
               <div style="font-size:14px; margin-top:4px;">
-                <span style="color:var(--text-secondary);">✓ Đáp án chính xác: </span><span style="color:var(--accent-green); font-weight:bold;">${english}</span>
+                <span style="color:var(--text-secondary);"> Đáp án chính xác: </span><span style="color:var(--accent-green); font-weight:bold;">${english}</span>
               </div>
-              ${ vietnamese ? `<div style="font-size:14px; color:var(--text-secondary);">🇻🇳 Nghĩa: ${vietnamese}</div>` : '' }
+              ${ vietnamese ? `<div style="font-size:14px; color:var(--text-secondary);"> Nghĩa: ${vietnamese}</div>` : '' }
               <div style="font-size:12px; color:var(--text-tertiary); margin-top:8px;">
                 Đã học vào: ${new Date(item.lastSeen).toLocaleDateString('vi-VN')}
               </div>
@@ -3325,7 +3325,7 @@ Mỗi câu phải đúc kết riêng với định dạng chính xác và phân 
                       if (hasBlanks) {
                          const solvedHtml = escapeHtml(sentence).replace(/\*\*([^*]+)\*\*/g, '<span style="color:var(--accent-orange); font-weight:bold;">$1</span>');
                          const hideStyle = hideGrammarHints ? 'style="display:none;"' : '';
-                         finalHtml += `<div class="ai-quiz-panel" style="margin-bottom:15px; padding:15px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-card); box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span class="ai-badge-tense" ${hideStyle} style="padding:3px 12px; border-radius:20px; font-size:12px; font-weight:700; background:linear-gradient(135deg,rgba(102,126,234,0.25),rgba(118,75,162,0.15)); color:var(--accent-blue); border:1px solid rgba(102,126,234,0.3)">📚 ${escapeHtml(tName)}</span><span style="font-size:13px; color:var(--text-muted); font-weight:600;">Câu ${idx+1}</span></div><div style="font-size:16px; margin-bottom:12px; line-height:1.8;">${clozeSentence}</div><button class="btn btn-primary ai-quiz-check" style="padding:4px 12px; font-size:13px;">Kiểm tra đáp án</button><div class="ai-quiz-feedback" style="display:none; margin-top:12px; font-size:14px; line-height:1.6; border-top:1px dashed var(--border-color); padding-top:12px;"><div style="color:var(--accent-green); margin-bottom:8px; font-size:15px;">✓ Lời giải: <strong>${solvedHtml}</strong></div>${nghia ? '<div style="margin-bottom:4px;"><strong>🇻🇳 Nghĩa:</strong> ' + escapeHtml(nghia) + '</div>' : ''}${dauhieu ? '<div class="ai-clue-block" ' + hideStyle + ' style="margin-bottom:4px;padding:6px 10px;background:rgba(102,126,234,0.08);border-radius:6px;border-left:3px solid var(--accent-blue);"><strong>🔍 Dấu hiệu thì ' + escapeHtml(tName) + ':</strong> ' + escapeHtml(dauhieu) + '</div>' : ''}${giaithich ? '<div class="ai-deep-block" style="padding:6px 10px;background:rgba(52,211,153,0.08);border-radius:6px;border-left:3px solid var(--accent-green);"><strong>💡 Khắc sâu:</strong> ' + escapeHtml(giaithich) + '</div>' : ''}</div></div>`;
+                         finalHtml += `<div class="ai-quiz-panel" style="margin-bottom:15px; padding:15px; border:1px solid var(--border-color); border-radius:8px; background:var(--bg-card); box-shadow:0 2px 8px rgba(0,0,0,0.05);"><div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span class="ai-badge-tense" ${hideStyle} style="padding:3px 12px; border-radius:20px; font-size:12px; font-weight:700; background:linear-gradient(135deg,rgba(102,126,234,0.25),rgba(118,75,162,0.15)); color:var(--accent-blue); border:1px solid rgba(102,126,234,0.3)"> ${escapeHtml(tName)}</span><span style="font-size:13px; color:var(--text-muted); font-weight:600;">Câu ${idx+1}</span></div><div style="font-size:16px; margin-bottom:12px; line-height:1.8;">${clozeSentence}</div><button class="btn btn-primary ai-quiz-check" style="padding:4px 12px; font-size:13px;">Kiểm tra đáp án</button><div class="ai-quiz-feedback" style="display:none; margin-top:12px; font-size:14px; line-height:1.6; border-top:1px dashed var(--border-color); padding-top:12px;"><div style="color:var(--accent-green); margin-bottom:8px; font-size:15px;"> Lời giải: <strong>${solvedHtml}</strong></div>${nghia ? '<div style="margin-bottom:4px;"><strong> Nghĩa:</strong> ' + escapeHtml(nghia) + '</div>' : ''}${dauhieu ? '<div class="ai-clue-block" ' + hideStyle + ' style="margin-bottom:4px;padding:6px 10px;background:rgba(102,126,234,0.08);border-radius:6px;border-left:3px solid var(--accent-blue);"><strong> Dấu hiệu thì ' + escapeHtml(tName) + ':</strong> ' + escapeHtml(dauhieu) + '</div>' : ''}${giaithich ? '<div class="ai-deep-block" style="padding:6px 10px;background:rgba(52,211,153,0.08);border-radius:6px;border-left:3px solid var(--accent-green);"><strong> Khắc sâu:</strong> ' + escapeHtml(giaithich) + '</div>' : ''}</div></div>`;
                       } else {
                          finalHtml += '<div style="margin-bottom:10px; padding:10px; background:var(--bg-card); border-radius:6px;">' + escapeHtml(sentence) + '</div>';
                       }
