@@ -99,6 +99,22 @@ async function fetchReviewWords() {
   });
 }
 
+function normalizeEnglishAnswer(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\(.*?\)/g, ' ')
+    .replace(/[^a-z0-9\s'-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildAcceptedAnswers(rawAnswers) {
+  return String(rawAnswers || '')
+    .split(/[\/;,]/)
+    .map(normalizeEnglishAnswer)
+    .filter(Boolean);
+}
+
 function showEmptyState() {
   document.getElementById('card-loading').style.display = 'none';
   document.getElementById('card-empty').style.display = 'flex';
@@ -123,6 +139,7 @@ function showFlashcard(wordObj) {
   inputEl.focus();
   fbMsg.textContent = '';
   fbMsg.className = 'feedback-msg';
+  let attemptNumber = 0;
 
   btnSkip.onclick = () => {
     // Skip review -> just hide card
@@ -131,10 +148,12 @@ function showFlashcard(wordObj) {
   };
 
   const submitAnswer = () => {
-    const typed = inputEl.value.trim().toLowerCase();
+    const rawTyped = inputEl.value.trim();
+    const typed = normalizeEnglishAnswer(rawTyped);
     if (!typed) return;
+    attemptNumber++;
 
-    const correctAnswers = (wordObj.english || '').split('/').map(s => s.trim().toLowerCase());
+    const correctAnswers = buildAcceptedAnswers(wordObj.english);
     const isCorrect = correctAnswers.includes(typed);
 
     if (isCorrect) {
@@ -145,8 +164,11 @@ function showFlashcard(wordObj) {
       // Update stats in background
       chrome.runtime.sendMessage({
         action: 'update_vocab',
+        english: wordObj.english,
         word: wordObj.english,
         vietnamese: wordObj.vietnamese,
+        userInput: rawTyped,
+        attemptNumber,
         isCorrect: true
       });
 
@@ -165,8 +187,11 @@ function showFlashcard(wordObj) {
       // Update stats
       chrome.runtime.sendMessage({
         action: 'update_vocab',
+        english: wordObj.english,
         word: wordObj.english,
         vietnamese: wordObj.vietnamese,
+        userInput: rawTyped,
+        attemptNumber,
         isCorrect: false
       });
 

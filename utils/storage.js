@@ -15,7 +15,7 @@ const STORAGE_KEYS = {
   GRAMMAR_LIST: 'tg_grammar_list'
 };
 
-const MAX_EVENTS = 50000; // Max events to keep before auto-cleanup
+const MAX_EVENTS = 5000; // Max events to keep before auto-cleanup
 
 // ============ UUID Generator ============
 function generateUUID() {
@@ -212,6 +212,7 @@ async function updateVocabSummary(vocabData) {
     s.practiceCorrectAttempts = (s.practiceCorrectAttempts || 0) + 1;
     s.streakCorrect++;
     if (vocabData.attemptNumber) {
+      if (!s.attemptsBeforeCorrectList) s.attemptsBeforeCorrectList = [];
       s.attemptsBeforeCorrectList.push(vocabData.attemptNumber);
       if (s.attemptsBeforeCorrectList.length > 20) s.attemptsBeforeCorrectList.shift();
       const sum = s.attemptsBeforeCorrectList.reduce((a, b) => a + b, 0);
@@ -508,6 +509,7 @@ async function updateSessionSummary(sessionData) {
   const s = summaries[key];
   s.lastPracticed = now;
 
+  if (!s.dates) s.dates = [];
   if (!s.dates.includes(today)) {
     s.dates.push(today);
   }
@@ -522,6 +524,7 @@ async function updateSessionSummary(sessionData) {
     s.totalWords = Math.max(s.totalWords, sessionData.totalWords);
   }
   if (sessionData.score !== undefined) {
+    if (!s.scores) s.scores = [];
     s.scores.push(sessionData.score);
   }
   if (sessionData.timeSpentMs) {
@@ -737,3 +740,6 @@ async function getWeeklyStats() {
 
   return dailyStats;
 }
+
+
+

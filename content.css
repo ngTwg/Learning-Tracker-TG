@@ -331,9 +331,17 @@
 }
 
 @keyframes tg-pulse {
-  0% { box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35); }
-  50% { box-shadow: 0 20px 48px rgba(56, 189, 248, 0.45); }
-  100% { box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35); }
+  0% {
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+  }
+
+  50% {
+    box-shadow: 0 20px 48px rgba(56, 189, 248, 0.45);
+  }
+
+  100% {
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.35);
+  }
 }
 
 #tg-tracker-badge.tg-pulse {
@@ -356,13 +364,14 @@ body.tg-focus-mode #tg-tracker-badge {
 #tg-omni-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: rgba(0, 0, 0, 0.4);
   z-index: 999999;
   backdrop-filter: blur(2px);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s;
 }
+
 #tg-omni-backdrop.tg-show {
   opacity: 1;
   pointer-events: auto;
@@ -429,14 +438,15 @@ body.tg-focus-mode #tg-tracker-badge {
   transition: background 0.1s;
 }
 
-.tg-omni-item.tg-selected, .tg-omni-item:hover {
+.tg-omni-item.tg-selected,
+.tg-omni-item:hover {
   background: rgba(56, 189, 248, 0.15);
   color: #38bdf8;
 }
 
 .tg-omni-shortcut {
   margin-left: auto;
-  background: rgba(0,0,0,0.3);
+  background: rgba(0, 0, 0, 0.3);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 12px;
@@ -445,10 +455,21 @@ body.tg-focus-mode #tg-tracker-badge {
 
 /* ── Mascot bounce ── */
 @keyframes tgMascotBounce {
-  0%   { transform: scale(1); }
-  40%  { transform: scale(1.5) translateY(-6px); }
-  70%  { transform: scale(0.9) translateY(2px); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.5) translateY(-6px);
+  }
+
+  70% {
+    transform: scale(0.9) translateY(2px);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 /* ── Signal Word Highlighter ── */
@@ -481,7 +502,7 @@ body.tg-focus-mode #tg-tracker-badge {
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.15s;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 .tg-signal-word:hover::after {
@@ -531,7 +552,7 @@ body.tg-focus-mode #tg-tracker-badge {
   display: inline-block;
   cursor: pointer;
   transition: color 0.2s, background 0.2s;
-  border: 1px solid rgba(148,163,184,0.3);
+  border: 1px solid rgba(148, 163, 184, 0.3);
   padding: 0 2px;
   user-select: none;
 }
@@ -539,4 +560,131 @@ body.tg-focus-mode #tg-tracker-badge {
 .tg-cloze-word.revealed {
   background: rgba(16, 185, 129, 0.2);
   color: #10b981 !important;
+}
+
+/* ── Pronunciation Tooltip ── */
+.tg-pronunciation-tooltip {
+  position: absolute;
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.98));
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  z-index: 100000;
+  min-width: 220px;
+  max-width: 320px;
+  backdrop-filter: blur(12px);
+  pointer-events: auto;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  animation: tg-tooltip-fade-in 0.2s ease;
+}
+
+@keyframes tg-tooltip-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tg-pronunciation-tooltip .tg-pron-word {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tg-pronunciation-tooltip .tg-pron-speaker {
+  background: rgba(99, 102, 241, 0.25);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.tg-pronunciation-tooltip .tg-pron-speaker:hover {
+  background: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+}
+
+.tg-pronunciation-tooltip .tg-pron-ipa {
+  font-size: 16px;
+  color: #a5b4fc;
+  font-family: 'Segoe UI', 'Lucida Sans Unicode', sans-serif;
+  margin-bottom: 6px;
+  font-style: italic;
+}
+
+.tg-pronunciation-tooltip .tg-pron-type {
+  font-size: 11px;
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 4px;
+  padding: 2px 6px;
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
+.tg-pronunciation-tooltip .tg-pron-meaning {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.5;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.tg-pronunciation-tooltip .tg-pron-loading {
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+  padding: 8px 0;
+}
+
+.tg-pronunciation-tooltip .tg-pron-error {
+  font-size: 12px;
+  color: #fca5a5;
+  text-align: center;
+  padding: 8px 0;
+}
+
+.tg-pronunciation-tooltip .tg-pron-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(148, 163, 184, 0.2);
+  border: none;
+  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.tg-pronunciation-tooltip .tg-pron-close:hover {
+  background: rgba(248, 113, 113, 0.3);
+  color: #fca5a5;
+}
+
+/* Input highlight khi có pronunciation */
+input.tg-has-pronunciation {
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3) !important;
 }

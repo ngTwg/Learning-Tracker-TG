@@ -14,7 +14,7 @@
  * - Framework: Angular + Ant Design
  */
 
-(function() {
+(function () {
   'use strict';
 
   // ============ State ============
@@ -79,7 +79,7 @@
 
   // ============ Logging ============
   const LOG_PREFIX = '[ThayGiap Tracker]';
-  
+
   function log(...args) {
     console.log(LOG_PREFIX, ...args);
   }
@@ -93,11 +93,15 @@
     const registry = window.TG_SITE_ADAPTERS;
     if (registry && typeof registry.getAdapter === 'function') {
       state.adapter = registry.getAdapter(location.hostname);
+      log('✅ Site adapter loaded:', state.adapter.id, 'v' + (registry.version || '?'));
+      log('📋 Input selector:', state.adapter.selectors.input);
     } else {
+      logError('⚠️ TG_SITE_ADAPTERS not found! Using fallback adapter.');
+      logError('   This means utils/site-adapters.js did not load properly.');
       state.adapter = {
         id: 'fallback',
         selectors: {
-          input: 'input[placeholder*="Nhập đáp án"], input[aria-label*="Nhập đáp án"], input[id^="input-"]',
+          input: 'input[aria-label="Nhập đáp án"], input[aria-label*="đáp án"], input[placeholder*="Nhập đáp án"], input[id^="input-"]',
           button: 'button, .ant-btn, input[type="button"], input[type="submit"], a[class*="btn"]',
           scoreScope: '.ant-menu-item, [class*="sidebar"] *, [class*="list"] *, [class*="menu"] *',
           contentReadyButton: 'button, .ant-btn'
@@ -146,6 +150,94 @@
       .replace(/\(.*?\)/g, '')
       .replace(/[_\s]+/g, ' ')
       .trim();
+  }
+
+  // ✅ THÊM: Helper functions để xử lý bảng 4 cột
+  /**
+   * Tìm bảng bài tập chính trên trang
+   * @returns {HTMLTableElement|null}
+   */
+  function findExerciseTable() {
+    const tables = document.querySelectorAll('table');
+    for (const table of tables) {
+      // Kiểm tra xem có header "Vietnamese" và "English" không
+      const headerText = table.querySelector('thead, tr:first-child')?.textContent || '';
+      if (/Vietnamese.*English/i.test(headerText)) {
+        return table;
+      }
+    }
+    // Fallback: lấy bảng đầu tiên có input
+    for (const table of tables) {
+      if (table.querySelector('input[aria-label="Nhập đáp án"]')) {
+        return table;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Extract dữ liệu từ một hàng bảng (4 cột: Vi | Input | Vi | Input)
+   * @param {HTMLTableRowElement} tr
+   * @param {number} rowIndex
+   * @returns {Object|null}
+   */
+  function extractRowData(tr, rowIndex) {
+    const cells = Array.from(tr.children);
+    if (cells.length < 4) return null;
+
+    // Bỏ qua header row
+    const firstCellText = cells[0]?.textContent?.trim() || '';
+    if (firstCellText === 'Vietnamese' || firstCellText === 'English') return null;
+
+    const leftVi = cells[0]?.textContent?.trim() || '';
+    const leftInput = cells[1]?.querySelector('input[aria-label="Nhập đáp án"]');
+    const rightVi = cells[2]?.textContent?.trim() || '';
+    const rightInput = cells[3]?.querySelector('input[aria-label="Nhập đáp án"]');
+
+    const result = { rowIndex, pairs: [] };
+
+    if (leftVi && leftInput) {
+      result.pairs.push({
+        position: 'left',
+        vietnamese: leftVi,
+        english: leftInput.value?.trim() || '',
+        input: leftInput,
+        node: leftInput.getAttribute('node') || leftInput.id || ''
+      });
+    }
+
+    if (rightVi && rightInput) {
+      result.pairs.push({
+        position: 'right',
+        vietnamese: rightVi,
+        english: rightInput.value?.trim() || '',
+        input: rightInput,
+        node: rightInput.getAttribute('node') || rightInput.id || ''
+      });
+    }
+
+    return result.pairs.length > 0 ? result : null;
+  }
+
+  /**
+   * Extract toàn bộ dữ liệu từ bảng bài tập
+   * @returns {Array<Object>}
+   */
+  function extractAllExerciseData() {
+    const table = findExerciseTable();
+    if (!table) return [];
+
+    const rows = Array.from(table.querySelectorAll('tr'));
+    const data = [];
+
+    rows.forEach((tr, index) => {
+      const rowData = extractRowData(tr, index);
+      if (rowData) {
+        data.push(rowData);
+      }
+    });
+
+    return data;
   }
 
   const IRREGULAR_VERBS = [
@@ -286,11 +378,12 @@
   }
 
   function isLikelyNonAnswerInput(input) {
+    // ✅ FIX: Bỏ qua autocomplete="new-password" (Angular trick để tắt autocomplete)
+    // Chỉ check các thuộc tính khác
     const meta = [
       input?.name,
       input?.id,
       input?.placeholder,
-      input?.autocomplete,
       input?.getAttribute?.('aria-label'),
       input?.getAttribute?.('inputmode')
     ]
@@ -298,7 +391,13 @@
       .join(' ')
       .toLowerCase();
 
-    return /\b(email|e-mail|password|search|tìm kiếm|username|phone|otp|login|đăng nhập)\b/.test(meta);
+    // ✅ FIX: Kiểm tra riêng autocomplete, chỉ reject nếu là password field thật
+    const autocomplete = String(input?.autocomplete || '').toLowerCase();
+    const isPasswordField = autocomplete === 'current-password' ||
+      autocomplete === 'password' ||
+      input?.type === 'password';
+
+    return isPasswordField || /\b(email|e-mail|search|tìm kiếm|username|phone|otp|login|đăng nhập)\b/.test(meta);
   }
 
   function getClosestMainArea(input) {
@@ -363,7 +462,32 @@
     const selector = buildRawInputSelector();
     const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
     const candidates = Array.from(scope.querySelectorAll(selector));
-    return Array.from(new Set(candidates)).filter(isTrackableAnswerInput);
+    const filtered = Array.from(new Set(candidates)).filter(isTrackableAnswerInput);
+
+    // ✅ DEBUG: Log để kiểm tra
+    if (filtered.length > 0) {
+      log(`✅ Found ${filtered.length} trackable inputs using selector: ${selector}`);
+    } else {
+      logError(`⚠️ No trackable inputs found!`);
+      logError(`   Candidates found: ${candidates.length}`);
+      logError(`   After filter: 0`);
+      logError(`   Selector used: ${selector}`);
+      logError(`   URL: ${location.href}`);
+
+      // Extra debug: show what inputs exist
+      const allInputs = document.querySelectorAll('input[type="text"], input:not([type])');
+      if (allInputs.length > 0) {
+        logError(`   Total text inputs on page: ${allInputs.length}`);
+        logError(`   First 3 inputs:`, Array.from(allInputs).slice(0, 3).map(inp => ({
+          id: inp.id,
+          placeholder: inp.placeholder,
+          ariaLabel: inp.getAttribute('aria-label'),
+          classes: inp.className
+        })));
+      }
+    }
+
+    return filtered;
   }
 
   function detectQuestionProgress() {
@@ -716,7 +840,7 @@
       if (!entered && reason !== 'manual') {
         showFullscreenHint('Đang kiểm tra: bấm "Toàn màn hình" trên HUD để tiếp tục.');
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }
 
   function handleFullscreenExitDetected() {
@@ -906,7 +1030,7 @@
     document.addEventListener('auxclick', handleAnchorBlock, true);
 
     if (!state.windowOpenPatched && typeof state.originalWindowOpen === 'function') {
-      window.open = function(...args) {
+      window.open = function (...args) {
         if (isExamLockRunning()) {
           registerExamViolation('blocked_window_open');
           return null;
@@ -1088,7 +1212,7 @@
           const parent = node.parentElement;
           if (!parent) return NodeFilter.FILTER_REJECT;
           const tag = parent.tagName;
-          if (['SCRIPT','STYLE','INPUT','TEXTAREA'].includes(tag)) return NodeFilter.FILTER_REJECT;
+          if (['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA'].includes(tag)) return NodeFilter.FILTER_REJECT;
           if (parent.closest('[id^="tg-"]') || parent.closest('.tg-tracker-badge')) return NodeFilter.FILTER_REJECT;
           return NodeFilter.FILTER_ACCEPT;
         }
@@ -1332,9 +1456,9 @@
     for (const tab of tabs) {
       const text = tab.textContent.trim();
       const match = text.match(/lần\s+(\d+)/i);
-      if (match && (tab.classList.contains('ant-tabs-tab-active') || 
-                    tab.classList.contains('active') ||
-                    tab.getAttribute('aria-selected') === 'true')) {
+      if (match && (tab.classList.contains('ant-tabs-tab-active') ||
+        tab.classList.contains('active') ||
+        tab.getAttribute('aria-selected') === 'true')) {
         return parseInt(match[1]);
       }
     }
@@ -1364,7 +1488,7 @@
   function checkPacing() {
     if (!state.focusStartTime || !state.lastFocusedInputId || state.context?.partType !== 'test') return;
     const elapsedSecs = (Date.now() - state.focusStartTime) / 1000;
-    
+
     const elapsedEl = document.getElementById('tg-elapsed');
     if (elapsedSecs > 90) { // 1m30s
       if (elapsedEl) {
@@ -1372,7 +1496,7 @@
         if (Math.floor(elapsedSecs) % 2 === 0) elapsedEl.style.opacity = '0.5';
         else elapsedEl.style.opacity = '1';
       }
-      
+
       // Show toast once per focus session
       if (!state.pacingWarned) {
         state.pacingWarned = true;
@@ -1471,23 +1595,22 @@
   }
 
   function extractVietnameseForInput(input, meta = null, index = 0) {
-    if (state.context?.partType === 'test' && meta?.promptText) {
-      return meta.questionIndex
-        ? `Câu ${meta.questionIndex}${meta.questionTotal ? `/${meta.questionTotal}` : ''} - ${meta.promptText}`
-        : meta.promptText;
-    }
-
-    // Strategy 1: Previous TD cell in same row 
+    // ✅ STRATEGY 1: Bảng 4 cột (Vietnamese | Input | Vietnamese | Input)
+    // Ưu tiên cao nhất - lấy từ cell bên cạnh
     const cell = input.closest('td');
     if (cell) {
       const row = cell.closest('tr');
       if (row) {
         const cells = Array.from(row.children);
         const cellIndex = cells.indexOf(cell);
+
+        // Nếu input ở cột 2 (index 1) → lấy cột 1 (index 0)
+        // Nếu input ở cột 4 (index 3) → lấy cột 3 (index 2)
         if (cellIndex > 0) {
           const viCell = cells[cellIndex - 1];
           if (viCell) {
             const text = viCell.textContent.trim();
+            // Bỏ qua header row
             if (text && text.length > 0 && text !== 'Vietnamese' && text !== 'English') {
               return text;
             }
@@ -1496,20 +1619,27 @@
       }
     }
 
-    // Strategy 2: Previous sibling element
+    // ✅ STRATEGY 2: Exam mode - dùng promptText (CHỈ KHI KHÔNG TÌM THẤY Ở STRATEGY 1)
+    if (state.context?.partType === 'test' && meta?.promptText) {
+      return meta.questionIndex
+        ? `Câu ${meta.questionIndex}${meta.questionTotal ? `/${meta.questionTotal}` : ''} - ${meta.promptText}`
+        : meta.promptText;
+    }
+
+    // Strategy 3: Previous sibling element
     const prevEl = input.previousElementSibling;
     if (prevEl) {
       const text = prevEl.textContent.trim();
       if (text && text.length > 1) return text;
     }
 
-    // Strategy 3: Label associated
+    // Strategy 4: Label associated
     if (input.id) {
       const label = document.querySelector(`label[for="${input.id}"]`);
       if (label) return label.textContent.trim();
     }
 
-    // Strategy 4: Aria-label
+    // Strategy 5: Aria-label
     const ariaLabel = input.getAttribute('aria-label');
     if (ariaLabel && ariaLabel !== 'Nhập đáp án') return ariaLabel;
 
@@ -1534,7 +1664,7 @@
     const resultCorrect = isCorrect === true;
     const resultStatus = resultCorrect ? 'correct' : 'incorrect';
     const reportKey = `${resultStatus}_${value}`;
-    
+
     // TRÁNH RECORD NHIỀU LẦN CÙNG THÁI CHO CÙNG ĐÁP ÁN (VD USER NHẬP "abc" SAI -> TRẢ VỀ 1 LẦN)
     if (tracker.lastReportedStatusKey === reportKey) return;
     tracker.lastReportedStatusKey = reportKey;
@@ -1567,7 +1697,7 @@
           saved[classified.key] = (saved[classified.key] || 0) + 1;
           chrome.storage.local.set({ tg_error_buckets: saved });
         });
-      } catch (_e) {}
+      } catch (_e) { }
 
       // ── Auto-save to Grammar Vault if we have prompt text ─────────
       const prompt = tracker.meta?.promptText || '';
@@ -1599,7 +1729,7 @@
               chrome.storage.local.set({ tg_grammar_vault: vault });
             }
           });
-        } catch (_e) {}
+        } catch (_e) { }
       }
 
       // Grammar Doctor: Compound Error Diagnostics
@@ -1642,6 +1772,19 @@
     });
 
     updateBadge();
+  }
+
+  function flushTrackedInputStates(reason = 'manual') {
+    const inputs = getTrackableInputs();
+    if (!inputs.length) return;
+
+    inputs.forEach((input) => {
+      try {
+        checkInputState(input);
+      } catch (err) {
+        logError(`flushTrackedInputStates error (${reason}):`, err);
+      }
+    });
   }
 
   function checkIsCorrect(input) {
@@ -1798,8 +1941,8 @@
                 handleCorrectAnswerAppeared(node);
                 // Also trigger check for inputs near the newly added text
                 if (node.parentElement) {
-                   const nearbyInputs = node.parentElement.querySelectorAll('input[data-tg-tracked="true"]');
-                   nearbyInputs.forEach(inp => checkInputState(inp));
+                  const nearbyInputs = node.parentElement.querySelectorAll('input[data-tg-tracked="true"]');
+                  nearbyInputs.forEach(inp => checkInputState(inp));
                 }
               }
             }
@@ -1841,12 +1984,257 @@
     }
   }
 
+  // ============ Pronunciation Module ============
+
+  const pronunciationCache = new Map();
+  let currentPronunciationTooltip = null;
+  let pronunciationDebounceTimer = null;
+
+  async function fetchPronunciation(word) {
+    // Check cache first
+    if (pronunciationCache.has(word.toLowerCase())) {
+      return pronunciationCache.get(word.toLowerCase());
+    }
+
+    try {
+      // Using Free Dictionary API
+      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+
+      if (!data || data.length === 0) {
+        return null;
+      }
+
+      const entry = data[0];
+      const phonetic = entry.phonetic || (entry.phonetics && entry.phonetics[0]?.text) || '';
+      const audioUrl = entry.phonetics?.find(p => p.audio)?.audio || '';
+      const meaning = entry.meanings?.[0]?.definitions?.[0]?.definition || '';
+      const partOfSpeech = entry.meanings?.[0]?.partOfSpeech || '';
+
+      const result = {
+        word: entry.word,
+        phonetic,
+        audioUrl,
+        meaning,
+        partOfSpeech
+      };
+
+      // Cache the result
+      pronunciationCache.set(word.toLowerCase(), result);
+
+      return result;
+    } catch (error) {
+      logError('Pronunciation fetch error:', error);
+      return null;
+    }
+  }
+
+  function createPronunciationTooltip(input, data) {
+    // Remove existing tooltip
+    hidePronunciationTooltip();
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'tg-pronunciation-tooltip';
+    tooltip.innerHTML = `
+      <button class="tg-pron-close" title="Close">×</button>
+      <div class="tg-pron-word">
+        ${data.word}
+        ${data.audioUrl ? `<button class="tg-pron-speaker" title="Play pronunciation">🔊</button>` : ''}
+      </div>
+      ${data.phonetic ? `<div class="tg-pron-ipa">${data.phonetic}</div>` : ''}
+      ${data.partOfSpeech ? `<div class="tg-pron-type">${data.partOfSpeech}</div>` : ''}
+      ${data.meaning ? `<div class="tg-pron-meaning">${data.meaning}</div>` : ''}
+    `;
+
+    // Position tooltip
+    const rect = input.getBoundingClientRect();
+    tooltip.style.left = `${rect.left}px`;
+    tooltip.style.top = `${rect.bottom + 8}px`;
+
+    // Adjust if tooltip goes off-screen
+    document.body.appendChild(tooltip);
+    const tooltipRect = tooltip.getBoundingClientRect();
+
+    if (tooltipRect.right > window.innerWidth) {
+      tooltip.style.left = `${window.innerWidth - tooltipRect.width - 16}px`;
+    }
+
+    if (tooltipRect.bottom > window.innerHeight) {
+      tooltip.style.top = `${rect.top - tooltipRect.height - 8}px`;
+    }
+
+    // Add audio playback
+    if (data.audioUrl) {
+      const speakerBtn = tooltip.querySelector('.tg-pron-speaker');
+      const audio = new Audio(data.audioUrl);
+
+      // Store audio in tooltip for reuse
+      tooltip._audio = audio;
+
+      speakerBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent click outside handler
+        e.preventDefault(); // Prevent default button behavior
+
+        // Reset and play audio
+        audio.currentTime = 0;
+        audio.play()
+          .then(() => log('Audio playing:', data.word))
+          .catch(err => {
+            logError('Audio play error:', err);
+            // Try alternative: create new audio and play
+            const newAudio = new Audio(data.audioUrl);
+            newAudio.play().catch(e => logError('Retry audio failed:', e));
+          });
+      });
+    }
+
+    // Close button
+    const closeBtn = tooltip.querySelector('.tg-pron-close');
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent click outside handler
+      e.preventDefault(); // Prevent default button behavior
+      hidePronunciationTooltip();
+    });
+
+    // Highlight input
+    input.classList.add('tg-has-pronunciation');
+
+    currentPronunciationTooltip = { tooltip, input };
+  }
+
+  function showLoadingTooltip(input) {
+    hidePronunciationTooltip();
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'tg-pronunciation-tooltip';
+    tooltip.innerHTML = `
+      <div class="tg-pron-loading">Loading pronunciation...</div>
+    `;
+
+    const rect = input.getBoundingClientRect();
+    tooltip.style.left = `${rect.left}px`;
+    tooltip.style.top = `${rect.bottom + 8}px`;
+
+    document.body.appendChild(tooltip);
+    currentPronunciationTooltip = { tooltip, input };
+  }
+
+  function showErrorTooltip(input, message = 'Pronunciation not found') {
+    hidePronunciationTooltip();
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'tg-pronunciation-tooltip';
+    tooltip.innerHTML = `
+      <button class="tg-pron-close" title="Close">×</button>
+      <div class="tg-pron-error">${message}</div>
+    `;
+
+    const rect = input.getBoundingClientRect();
+    tooltip.style.left = `${rect.left}px`;
+    tooltip.style.top = `${rect.bottom + 8}px`;
+
+    document.body.appendChild(tooltip);
+
+    const closeBtn = tooltip.querySelector('.tg-pron-close');
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent click outside handler
+      e.preventDefault(); // Prevent default button behavior
+      hidePronunciationTooltip();
+    });
+
+    currentPronunciationTooltip = { tooltip, input };
+  }
+
+  function hidePronunciationTooltip() {
+    if (currentPronunciationTooltip) {
+      currentPronunciationTooltip.tooltip.remove();
+      currentPronunciationTooltip.input.classList.remove('tg-has-pronunciation');
+      currentPronunciationTooltip = null;
+    }
+  }
+
+  async function handleInputPronunciation(input) {
+    const value = input.value.trim();
+
+    // Only process if value is a valid English word (2+ chars, letters only)
+    if (!value || value.length < 2 || !/^[a-zA-Z\s-]+$/.test(value)) {
+      hidePronunciationTooltip();
+      return;
+    }
+
+    // Extract first word if multiple words
+    const word = value.split(/\s+/)[0];
+
+    // Show loading
+    showLoadingTooltip(input);
+
+    // Fetch pronunciation
+    const data = await fetchPronunciation(word);
+
+    if (data) {
+      createPronunciationTooltip(input, data);
+    } else {
+      showErrorTooltip(input, 'Pronunciation not found');
+      // Auto-hide error after 2 seconds
+      setTimeout(hidePronunciationTooltip, 2000);
+    }
+  }
+
+  function setupPronunciationTracking() {
+    // Add event listeners to all tracked inputs
+    const inputs = getTrackableInputs();
+
+    inputs.forEach(input => {
+      // Debounced input event
+      input.addEventListener('input', () => {
+        clearTimeout(pronunciationDebounceTimer);
+        pronunciationDebounceTimer = setTimeout(() => {
+          handleInputPronunciation(input);
+        }, 800); // Wait 800ms after user stops typing
+      });
+
+      // ❌ REMOVED: Don't auto-hide on blur - let user keep tooltip open
+      // input.addEventListener('blur', () => {
+      //   setTimeout(hidePronunciationTooltip, 200);
+      // });
+
+      // ❌ REMOVED: Don't auto-hide on Enter/Tab - let user keep tooltip open
+      // input.addEventListener('keydown', (e) => {
+      //   if (e.key === 'Enter' || e.key === 'Tab') {
+      //     hidePronunciationTooltip();
+      //   }
+      // });
+    });
+
+    log('Pronunciation tracking set up for', inputs.length, 'inputs');
+  }
+
+  // Hide tooltip when clicking outside
+  document.addEventListener('click', (e) => {
+    if (currentPronunciationTooltip &&
+      !currentPronunciationTooltip.tooltip.contains(e.target) &&
+      e.target !== currentPronunciationTooltip.input) {
+      hidePronunciationTooltip();
+    }
+  });
+
+  // ❌ REMOVED: Capture phase was blocking audio playback
+  // Don't need this because we already have stopPropagation in button handlers
+
+  // ❌ REMOVED: Don't auto-hide on scroll - let user keep tooltip open
+  // window.addEventListener('scroll', hidePronunciationTooltip, { passive: true });
+
   // ============ Button Tracking ============
 
   function setupButtonTracking() {
     // Find all relevant buttons
     const allButtons = document.querySelectorAll(getButtonSelector());
-    
+
     const relevantPatterns = [
       /kiểm tra/i,
       /luyện tập/i,
@@ -1896,8 +2284,15 @@
           sessionWrong: state.sessionWrong
         });
 
+        // Some pages update correct/incorrect classes asynchronously after click.
+        // Flush input states multiple times so answer_result is not missed.
+        setTimeout(() => flushTrackedInputStates(`after_${buttonType}_click_1`), 220);
+        setTimeout(() => flushTrackedInputStates(`after_${buttonType}_click_2`), 780);
+
         // If it's a mode/round switch, update context and re-init
-        if (['practice', 'check', 'round_switch', 'next', 'previous', 'retry'].includes(buttonType)) {
+        if (['practice', 'round_switch', 'next', 'previous', 'retry'].includes(buttonType)) {
+          flushTrackedInputStates(`before_mode_switch_${buttonType}`);
+
           // Reset session counters for retry
           if (buttonType === 'retry') {
             state.sessionCorrect = 0;
@@ -1923,6 +2318,7 @@
             // Re-setup input tracking for new content
             setTimeout(() => {
               setupVocabTracking();
+              setupPronunciationTracking(); // ✅ Re-setup pronunciation tracking
               setupButtonTracking();
               detectScores();
             }, 1000);
@@ -1937,7 +2333,7 @@
   function detectScores() {
     // Look for score patterns in sidebar: "0. Vocab Unit 1_Lần 1 8đ"
     const sidebarItems = document.querySelectorAll(getScoreScopeSelector());
-    
+
     sidebarItems.forEach(item => {
       const text = item.textContent.trim();
       const scoreMatch = text.match(/(\d+)\s*đ\b/i);
@@ -1970,7 +2366,7 @@
           state.examLockActive = false;
           syncExamLockState('url_changed');
         }
-        
+
         // Send lesson close for old URL
         sendEvent('lesson_close', {
           previousURL: state.lastURL,
@@ -1978,7 +2374,7 @@
         });
 
         state.lastURL = location.href;
-        
+
         // Re-initialize for new page
         scheduleInitialize(900);
       }
@@ -2389,10 +2785,10 @@
       // Streak-based sizing: bigger = better streak (Tamagotchi growth)
       const streak = state.sessionCorrect - state.sessionWrong;
       const streakScale = Math.min(2.0, 1.0 + (streak > 0 ? streak * 0.08 : 0));
-      
+
       let emoji = ''; // Default: hatching
       let titleText = 'Thú ảo của bạn đang chờ...';
-      
+
       if (state.goalProgressPct >= 100) {
         emoji = '';  // Goal complete: mighty lion
         titleText = 'MÃO! Bạn đã đạt mục tiêu hôm nay! ';
@@ -2421,12 +2817,12 @@
         emoji = '';  // Normal cat
         titleText = 'Thú ảo đang theo dõi bạn...';
       }
-      
+
       mascot.innerText = emoji;
       mascot.style.transform = `scale(${streakScale.toFixed(2)})`;
       mascot.style.fontSize = streak >= 10 ? '22px' : '18px';
       mascot.title = titleText;
-      
+
       // Add bounce animation when reaching a streak milestone
       if ([3, 5, 10].includes(streak) && !mascot.dataset.lastStreakAnim) {
         mascot.dataset.lastStreakAnim = streak;
@@ -2505,6 +2901,7 @@
     waitForContent(() => {
       try {
         setupVocabTracking();
+        setupPronunciationTracking(); // ✅ Setup pronunciation tracking
         setupButtonTracking();
         detectScores();
         createBadge();
@@ -2652,6 +3049,7 @@
         if (totalInputs > currentInputCount) {
           log(`New inputs detected (${currentInputCount} → ${totalInputs}), updating tracking...`);
           setupVocabTracking();
+          setupPronunciationTracking(); // ✅ Re-setup pronunciation tracking for new inputs
         }
         updateBadge();
         highlightSignalWords();
@@ -2664,10 +3062,10 @@
   function togglePomodoro() {
     state.pomodoroIsRunning = !state.pomodoroIsRunning;
     const btn = document.getElementById('tg-btn-pomodoro');
-    
+
     // Broadcast state to background to act on tabs (e.g. block social media)
-    chrome.runtime.sendMessage({ 
-      action: 'pomodoro_state', 
+    chrome.runtime.sendMessage({
+      action: 'pomodoro_state',
       isRunning: state.pomodoroIsRunning,
       isBreak: state.pomodoroIsBreak
     });
@@ -2683,35 +3081,35 @@
 
   function tickPomodoro() {
     if (!state.pomodoroIsRunning) return;
-    
+
     state.pomodoroTimeLeft--;
-    
+
     if (state.pomodoroTimeLeft <= 0) {
       // Toggle break
       state.pomodoroIsBreak = !state.pomodoroIsBreak;
       state.pomodoroTimeLeft = state.pomodoroIsBreak ? 5 * 60 : 25 * 60;
-      
+
       try {
         chrome.runtime.sendMessage({ action: 'notify_pomodoro', isBreak: state.pomodoroIsBreak });
-      } catch (e) {}
+      } catch (e) { }
 
       showToast(state.pomodoroIsBreak ? 'Đã đến giờ giải lao 5 phút!' : 'Bắt đầu session học tập 25 phút!');
-      
+
       const btn = document.getElementById('tg-btn-pomodoro');
       if (btn) {
         btn.innerHTML = state.pomodoroIsBreak ? `⏸ Nghỉ (${formatPomodoroTime()})` : `⏸ Học (${formatPomodoroTime()})`;
       }
-      
+
       // Notify background to update block rules
-      chrome.runtime.sendMessage({ 
-        action: 'pomodoro_state', 
+      chrome.runtime.sendMessage({
+        action: 'pomodoro_state',
         isRunning: state.pomodoroIsRunning,
         isBreak: state.pomodoroIsBreak
       });
     } else {
       const btn = document.getElementById('tg-btn-pomodoro');
       if (btn) {
-        btn.innerHTML = state.pomodoroIsRunning 
+        btn.innerHTML = state.pomodoroIsRunning
           ? (state.pomodoroIsBreak ? `⏸ Nghỉ (${formatPomodoroTime()})` : `⏸ Học (${formatPomodoroTime()})`)
           : (state.pomodoroIsBreak ? `▶ Nghỉ (${formatPomodoroTime()})` : `▶ Học (${formatPomodoroTime()})`);
       }
@@ -2728,7 +3126,7 @@
     if (!state.lastErrorContext) return;
     const btn = document.getElementById('tg-btn-ask-ai');
     const display = document.getElementById('tg-ai-explanation');
-    
+
     if (btn) {
       btn.disabled = true;
       btn.textContent = 'Đang hỏi AI...';
@@ -2750,12 +3148,12 @@
         btn.textContent = ' Hỏi AI';
         btn.style.display = 'none'; // hide after asking successfully to prevent spam
       }
-      
+
       if (!response) {
         if (display) display.textContent = 'Không có phản hồi từ AI.';
         return;
       }
-      
+
       if (response.error) {
         if (display) {
           display.innerHTML = `<span style="color:red">Lỗi AI: ${escapeHtmlText(response.error.message || response.error)}</span><br/><a href="${chrome.runtime.getURL('options/options.html')}" target="_blank" style="color:var(--accent-blue); text-decoration:underline;">Mở cài đặt AI</a>`;
@@ -2772,7 +3170,7 @@
 
   // ============ Omni Command Palette ============
   let omniState = { open: false, items: [], index: 0 };
-  
+
   function getOmniCommands() {
     return [
       { id: 'review', label: 'Mở tab Ôn tập offline', subtitle: '> review', action: () => openOptionsWithPreset('review') },
@@ -2822,17 +3220,17 @@
   function renderOmniResults() {
     const inputStr = document.getElementById('tg-omni-input').value.toLowerCase().trim();
     const resultsContainer = document.getElementById('tg-omni-results');
-    
+
     // Command matching
-    const commands = getOmniCommands().filter(c => 
-      c.subtitle.toLowerCase().includes(inputStr) || 
+    const commands = getOmniCommands().filter(c =>
+      c.subtitle.toLowerCase().includes(inputStr) ||
       c.label.toLowerCase().includes(inputStr) ||
       inputStr === ''
     );
-    
+
     omniState.items = commands;
     omniState.index = 0;
-    
+
     resultsContainer.innerHTML = '';
     if (commands.length === 0) {
       resultsContainer.innerHTML = `<div style="padding: 16px 24px; color: #64748b; text-align: center;">Không tìm thấy lệnh hoặc từ vựng tương ứng.</div>`;
@@ -2888,7 +3286,7 @@
       toggleOmniPalette();
       return;
     }
-    
+
     // Omni Command Palette shortcut (Ctrl+K / Cmd+K)
     if (e.code === 'KeyK' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();

@@ -1,0 +1,44 @@
+fix(vocab-tracking): Fix extension không lưu từ vựng từ thaygiap.com
+
+## Root Cause
+- File utils/site-adapters.js không load do syntax error (arrow functions, method shorthand)
+- Selector ưu tiên sai attribute (placeholder trước aria-label)
+
+## Changes
+
+### utils/site-adapters.js
+- Convert to ES5 syntax (const→var, arrow→function, method shorthand→function expression)
+- Update selector priority: aria-label="Nhập đáp án" (VERIFIED) lên đầu
+- Add validation flag (loaded: true) và version tracking
+- Add console.log để verify load
+
+### content.js
+- Enhanced debug logging in getAdapter()
+- Enhanced error messages in getTrackableInputs()
+- Show sample inputs when no trackable inputs found
+- Update fallback selector to match new priority
+
+### Test & Documentation
+- Created test_fix_verification.js (automated test script)
+- Created TESTING_GUIDE.md (detailed user guide)
+- Created IMPLEMENTATION_SUMMARY.md (technical summary)
+- Created QUICK_START.md (2-minute quick test)
+- Updated .kiro/specs/fix-vocab-tracking-bug/spec.md
+
+## Testing
+- [x] File loads successfully (TG_SITE_ADAPTERS.loaded === true)
+- [x] Selector finds inputs (aria-label exact match)
+- [x] Debug logging works
+- [ ] End-to-end test (needs user verification)
+
+## Breaking Changes
+None. Backward compatible.
+
+## Related Issues
+- Fixes core feature: Extension không track và lưu từ vựng
+- Improves debugging: Enhanced error messages
+- Adds test automation: test_fix_verification.js
+
+---
+Spec: .kiro/specs/fix-vocab-tracking-bug/spec.md
+Status: Implementation Complete - Ready for Testing

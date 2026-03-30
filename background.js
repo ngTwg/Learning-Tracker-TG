@@ -105,6 +105,10 @@ async function handleMessage(message, sender) {
       await processSM2Review(message.vietnamese, message.quality);
       return { ok: true };
 
+    // Backward compatibility: New Tab flashcard still sends this action
+    case 'update_vocab':
+      return handleLegacyUpdateVocab(message);
+
     case 'import_anki_rows':
       return { ok: true, data: await importAnkiRows(message.rows || []) };
 
@@ -159,6 +163,35 @@ async function handleMessage(message, sender) {
     default:
       return { ok: false, error: `Unknown action: ${message.action}` };
   }
+}
+
+async function handleLegacyUpdateVocab(message = {}) {
+  const vietnamese = (message.vietnamese || '').trim();
+  if (!vietnamese) {
+    return { ok: false, error: 'Missing vietnamese word' };
+  }
+
+  const english = (message.english || message.word || '').trim();
+  const userInput = (message.userInput || '').trim();
+  const attemptNumberRaw = Number(message.attemptNumber);
+  const attemptNumber = Number.isFinite(attemptNumberRaw) && attemptNumberRaw > 0
+    ? Math.floor(attemptNumberRaw)
+    : 1;
+  const isCorrect = !!message.isCorrect;
+
+  await updateVocabSummary({
+    vietnamese,
+    english,
+    userInput: userInput || (isCorrect ? english : ''),
+    correctAnswer: english,
+    isCorrect,
+    attemptNumber
+  });
+
+  // Map legacy boolean result to SM-2 quality score
+  await processSM2Review(vietnamese, isCorrect ? 4 : 0);
+
+  return { ok: true };
 }
 
 async function getAiUsage() {
