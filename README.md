@@ -1,111 +1,95 @@
-#  ThayGiap Learning Ecosystem (v1.4.0)
+# 🚀 ThayGiap Learning Ecosystem (v1.5.2)
 
-> Extension toàn diện hỗ trợ học tập, theo dõi tiến độ, phân tích dữ liệu và "game hóa" quá trình học trên hệ thống **Thầy Giáp ENGLISH** (thaygiap.com).
+> **"Solid-State" UI Edition** — Hệ sinh thái học tập tiếng Anh toàn diện, tích hợp AI, Gamification và cơ chế chống xao nhãng đột phá.
 
-**Author:** Lê Ngọc Tường _HCMUS_DTV
-
-Không chỉ là một tracker thông thường, ThayGiap Learning Ecosystem đem đến một **hệ sinh thái học tập chủ động**, tích hợp Gamification, Micro-learning, phân tích điểm yếu bằng dữ liệu và các công cụ chống xao nhãng hiệu quả.
-
----
-
-##  Hướng Dẫn Sử Dụng Từng Chức Năng (Features & Guide)
-
-### 1. ️ Bật/Tắt Extension Nhanh (Master Power Toggle)
-
-- **Tính năng**: Một nút nguồn `⏻` nằm ngay trên đầu cửa sổ Popup (nhấn vào biểu tượng extension nhỏ trên thanh công cụ).
-- **Cách dùng**: Nhấp vào nút nguồn để bật/tắt toàn bộ tính năng của Extension (Bao gồm HUD, theo dõi bài tập, Vé cầu đường Toll-booth, v.v.). Khi TẮT, nút sẽ có màu Đỏ và hiện thông báo nhắc nhở tạm ngưng hoạt động.
-
-### 2.  Vé Cầu Đường (Social Toll-booth Blocker)
-
-- **Tính năng**: Rào chắn "chống xao nhãng" bắt ép bạn ôn tập từ vựng mỗi khi vào các trang web giải trí. Thay vì cấm hoàn toàn, hệ thống sẽ chờ bạn lướt web xong một khoảng thời gian nhất định rồi mới hiện bài kiểm tra. Trả lời đúng từ vựng bạn mới được lướt tiếp.
-- **Cách thiết lập (Trong phần `Cài đặt` của bảng điều khiển chính)**:
-  - **Thêm trang web tùy chọn**: Nhập tên miền (domain) của bất kỳ trang web nào (VD: `facebook.com`, `youtube.com`, `tiktok.com`, `netflix.com`...) vào ô Text và bấm **"Thêm"**.
-  - **Xóa trang web**: Bấm nút `×` bên cạnh tên miền trong danh sách để hủy áp dụng Toll-booth cho trang đó.
-  - **Số từ kiểm tra**: Chọn mức độ khó bằng cách chọn sẽ bị hỏi `3`, `5`, `7`, hoặc `10 từ` mỗi lần chặn.
-  - **Thời gian xem tự do**: Cấu hình thời gian được sử dụng mạng xã hội trước khi bị hỏi bài (`5 phút`, `10 phút`, `15 phút`, `20 phút`, `30 phút`).
-  - **Bỏ qua (Skip)**: Có thể bật tùy chọn cho phép hiện nút "Bỏ qua" (Nếu bấm bỏ qua sẽ chỉ được thêm 1 phút tự do ngắn hạn).
-  - Bấm **Lưu Settings** để áp dụng và có thể thử nghiệm ngay bằng nút **"Thử Toll-booth ngay"**.
-
-### 3.  Gamification (Thú ảo & HUD Tương Tác)
-
-- **Tính năng**: Nuôi 1 "pet ảo" ngay trên góc màn hình thaygiap.com. Nhập câu trả lời đúng thú sẽ tăng trưởng.
-- **Cách dùng**: Tự động hoạt động khi bạn vào học trên thaygiap.com. Thú ảo sẽ qua các cấp độ tiến hóa (→→→→→). Đạt chuỗi câu đúng (Streak) liên tiếp sẽ kích hoạt hiệu ứng chúc mừng (Confetti nhảy múa)!
-
-### 4. ️ Ôn tập qua màn hình Tab Mới (New Tab Micro-learning)
-
-- **Tính năng**: Biến mỗi lần bạn mở tab trống mới (`Ctrl+T` / `Cmd+T`) thành một Flashcard ghi nhớ từ. Extension áp dụng vòng lặp Spaced Repetition (Thuật toán SM-2) để tự động ném ra các từ bạn đang chuẩn bị quên!
-- **Cách dùng**: Cài đặt extension xong -> Mở Chrome -> Nhấn Dấu `+` tạo tab mới. Bạn sẽ thấy 1 từ vựng, bắt buộc gõ nghĩa tiếng anh hoặc xem đáp án. Tính năng này giúp tận dụng thời gian chết vô thức mở trình duyệt.
-
-### 5.  Chế Độ Tắm Tiếng Anh (Tanglish Mode)
-
-- **Tính năng**: Hệ thống trích xuất các từ vựng bạn vừa học thuộc và tự động điền/thay thế đan xen vào nội dung khi bạn đọc báo mạng VN (VnExpress, Dân Trí, Tuổi Trẻ,...).
-- **Cách dùng**: Vào phần Cài đặt của extension, đảm bảo "Tanglish Mode" đang được bật. Di chuột lên các cụm từ màu cam gạch dưới trên các trang báo để xem lại bản gốc tiếng Việt.
-
-### 6.  Tính Năng AI (Tích hợp Trí Tuệ Nhân Tạo)
-
-- **Phân tích điểm yếu**: Gợi ý dựa trên lỗi sai của bạn. AI cho lời khuyên thực tế (AI Conclusion).
-- **Lò rèn câu (Sentence Forge)**: Công cụ cho phép tự viết câu Tiếng Anh và nhờ AI dùng API chấm điểm chỉ ra lỗi sai.
-- **Quản lý hạn mức (Daily Usage)**: Tích hợp thanh theo dõi tiến độ sử dụng AI trong ngày (Giới hạn Requests và Tokens) để đảm bảo không vượt quá quota miễn phí của provider.
-- **Cách thiết lập**: Vào Settings -> Mục **API Trí Tuệ Nhân Tạo**. Chọn **Gemini (Khuyên dùng)** hoặc **OpenAI**. Nhập `API Key` và Lưu.
-
-### 7.  Grammar Vault - Kho Ngữ Pháp & AI Quiz
-
-- **Tính năng**: Lưu trữ các câu làm sai ngữ pháp trên hệ thống.
-- ** AI Grammar Quiz (Nâng cấp)**: Chế độ tự động tạo bài tập từ AI dựa trên các thì tiếng Anh em chọn.
-  - **Tùy biến cao**: Lựa chọn cụ thể trong 12 thì (Tương lai hoàn thành tiếp diễn, Quá khứ đơn, ...), hoặc "Lộn xộn" để tăng thử thách.
-  - **Fill-in-the-blanks**: AI tự động tạo câu có verb trong ngoặc `(V_infinitive)` để bạn điền vào.
-  - **Badge Tên Thì**: Mỗi thẻ câu hỏi hiển thị rõ tên thì (ví dụ: ` Thì Tương lai Đơn`) để người học dễ nhận diện.
-  - **Phản hồi chi tiết**: Khi kiểm tra đáp án, AI sẽ hiển thị:
-    -  Lời giải chính xác với màu nổi bật.
-    -  Nghĩa của câu bằng tiếng Việt.
-    -  Dấu hiệu nhận biết thông minh (Signal words) của thì đó.
-    -  "Khắc sâu": Giải thích vì sao phải dùng cấu trúc đó trong ngữ cảnh này.
-- **Cách dùng**: Mở Bảng điều khiển lớn -> Tab "Kho Ngữ Pháp".
-
-### 8.  Vocab Dungeon RPG (Trò Chơi Ôn Tập)
-
-- **Tính năng**: Mini game dọn quái vật Slime bằng cách gõ chính xác các từ vựng khó nhất trong kho từ vựng.
-- **Cách dùng**: Mở bảng điều khiển lớn -> Chuyển sang thẻ "Vocab Dungeon". Tham gia tiêu diệt quái vật bảo vệ HP máu.
-
-### 9.  Signal Word Highlighter & Verb Lookup
-
-- **Signal Word**: Trong bài kiểm tra, những từ khóa như (already, since, just...) tự động highlight vàng. Nhấn hover để xem nhắc nhở ngữ pháp.
-- **Tra động từ**: Icon kính lúp nhỏ góc màn hình, nhấp vào đễ gõ tra cứu nhanh Verb 1 2 3 bất quy tắc.
-
-### 10.  Quản Lý Data & Export Ra Anki
-
-- Mọi data lưu `100% Offline Local` (Bảo vệ tính riêng tư).
-- Trích xuất: Tại Tab Settings, bạn có thể **Export JSON** hoặc **Xuất Anki CSV**. Trích xuất thẻ từ vựng Anki cho phép đồng bộ dữ liệu những từ bạn vừa làm sai trên máy tính sang điện thoại dễ dàng! Nhập file CSV vào Deck Anki Desktop.
+[![Version](https://img.shields.io/badge/version-1.5.2-blue.svg)](./manifest.json)
+[![Author](https://img.shields.io/badge/author-Lê%20Ngọc%20Tường-orange.svg)](https://github.com/ngTwg)
+[![Framework](https://img.shields.io/badge/core-Vanilla%20JS-yellow.svg)]()
+[![Status](https://img.shields.io/badge/status-Stable%20Release-green.svg)]()
 
 ---
 
-## ‍ Cấu Trúc Mã Nguồn Extension Dành Cho Developer
+## 🌟 Tổng Quan (Overview)
+
+ThayGiap Learning Ecosystem không chỉ là một công cụ theo dõi, mà là một **trợ lý học tập thông minh** giúp bạn biến mọi hoạt động duyệt web thành cơ hội tiếp thu kiến thức. Dự án được thiết kế dựa trên các nguyên lý khoa học não bộ (Spaced Repetition) và phương pháp học thụ động (Passive Learning).
+
+---
+
+## 🔥 Tính Năng Đột Phá (Core Features)
+
+### 1. 🔊 Pronunciation & IPA (Mới!)
+*   **Tự động nhận diện:** Ngay khi bạn nhập từ vựng, hệ thống sẽ tự động hiển thị phiên âm **IPA (International Phonetic Alphabet)**.
+*   **Âm thanh chuẩn (Audio):** Nghe phát âm trực tiếp từ người bản xứ thông qua tích hợp API từ điển miễn phí.
+*   **Giao diện Tooltip:** Hiển thị loại từ (noun, verb...), nghĩa và ví dụ ngay bên dưới ô nhập liệu với hiệu ứng mượt mà.
+
+### 2. ✨ Omni-Catcher 3.0
+*   **Bắt mọi nơi:** Bôi đen bất kỳ cụm từ nào trên MỌI trang web (VnExpress, Facebook, YouTube, Netflix...) để gọi AI giải thích.
+*   **AI Smart Explanation:** AI sẽ tóm tắt Nghĩa, Loại từ và cung cấp 1 ví dụ thực tế chỉ trong 1 giây.
+*   **Lưu nhanh:** Nút "Lưu vào ThayGiap" giúp bạn đưa từ vựng vào kho ôn tập mà không cần chuyển Tab.
+
+### 3. 🚧 Social Toll-booth (Vé Cầu Đường)
+*   **Chống xao nhãng:** Muốn vào Facebook/Youtube? Bạn phải trả phí bằng "Kiến thức".
+*   **Cơ chế linh hoạt:** Cho phép lướt web tự do trong X phút, sau đó yêu cầu trả lời đúng 3-10 từ vựng để tiếp tục.
+*   **Cài đặt:** Tùy chỉnh danh sách trang web bị chặn, độ khó và thời gian hồi (Cool-down).
+
+### 4. 📰 Tanglish Mode (Tắm Tiếng Anh)
+*   **Học thụ động:** Tự động chèn/thay thế các từ bạn đang học vào nội dung các trang báo mạng Việt Nam.
+*   **Ghi nhớ tự nhiên:** Giúp não bộ làm quen với từ vựng trong ngữ cảnh thực tế của tiếng mẹ đẻ.
+
+### 5. 🧪 AI Grammar Vault & Quiz
+*   **Chỉnh sửa ngữ pháp:** Lưu trữ các câu sai và sử dụng AI để giải thích lỗi sai chi tiết.
+*   **AI Quiz Generator:** Tự động tạo bài tập điền từ theo 12 thì tiếng Anh (Tenses) dựa trên trình độ cá nhân.
+*   **Signal Words:** Tự động Highlight các dấu hiệu nhận biết thì (since, yet, tomorrow...) để hỗ trợ làm bài.
+
+### 6. 🎮 Vocab Dungeon (Game Hóa)
+*   **Tiêu diệt quái vật:** Ôn tập từ vựng thông qua Mini-game RPG. Thành tích trong game tỉ lệ thuận với khả năng ghi nhớ từ của bạn.
+
+---
+
+## 🛠️ Cấu Trúc Dự Án (Architecture)
 
 ```text
 ThayGiap/
-├── manifest.json          # File cấu hình Mv3 + Khai báo Host Permissions (all_urls)
-├── background.js          # Service Worker: Xử lý State tổng, AI API calling, Token tracking
-├── content.js             # Content Script: Đoán DOM bài tập thaygiap.com, Signal Word, HUD, Mascot
-├── content.css            # Stylesheet DOM Injected, Anim Mascot
-├── tanglish.js            # Content Script: Parse DOM các trang báo, thay thế regex
-├── social_blocker.js/.css # Content Script: Màn hình Toll-booth, xử lý Timer & Logic Prompt
-├── popup/                 # Tùy chỉnh nhanh (Giao diện Icon Toolbar)
-├── options/               # Menu Dashboard SPA chính (Cài đặt, Matrix, Dungeon, Kéo thả List)
-├── newtab/                # Màn hình Tab mới Flashcard HTML (SM-2 Algorithm)
-└── utils/                 # Các Module nhỏ: Storage, Regex Tools, Export Handlers
+├── manifest.json          # Cấu hình Chrome Mv3 + Quyền truy cập
+├── background.js          # Trung tâm xử lý AI, Storage & Sync
+├── content.js             # Logic xử lý tại hệ thống thaygiap.com
+├── omni_catcher.js        # Module bắt từ vựng toàn cầu (Global Scraper)
+├── social_blocker.js      # Logic chặn và kiểm tra Toll-booth
+├── tanglish.js            # Module chèn tiếng Anh vào báo chí
+├── popup/                 # Giao diện icon thanh công cụ (Quick Settings)
+├── options/               # Bảng điều khiển trung tâm (Dashboard SPA)
+├── newtab/                # Flashcard học tập mỗi khi mở Tab mới
+└── utils/                 # Các tiện ích Storage, Site-Adapters...
 ```
-
-### Kiến Trúc Lắng Nghe DOM (Angular)
-
-Hệ thống của thaygiap.com dùng Client Router (không reset trang). Extension `content.js` dùng `MutationObserver` chuyên sâu bắt lỗi dựa theo CSS class sinh ra (`.incorrect`, `.correct`) và theo dõi URI để update session trực tiếp.
 
 ---
 
-*© Cấu trúc và Mã nguồn do cộng đồng phát triển hướng tới "Game hóa việc học thuật" — Hữu ích bổ trợ, không can thiệp nội dung web.*
+## 🚀 Hướng Dẫn Cài Đặt (Installation)
 
-### Liên hệ & Hỗ trợ (Contact)
+Hiện tại extension được phân phối dưới dạng mã nguồn mở để tối ưu quyền riêng tư 100% Offline (Local Data). Để cài đặt:
 
-- **Telegram**: @AstroMindquiz
-- **Gmail**: <lengoctuong2005@gmail.com>
-- **Facebook**: <https://www.facebook.com/ngtu.ong14.11>
-- **Copyright**: ©Lê Ngọc Tường_HCMUS_23DTV
+1.  **Tải xuống:** Tải hoặc Clone repository này về máy tính của bạn.
+2.  **Mở Chrome:** Truy cập đường dẫn `chrome://extensions/`.
+3.  **Chế độ nhà phát triển:** Bật công tắc **"Developer mode"** ở góc trên bên phải.
+4.  **Tải tệp:** Nhấn vào nút **"Load unpacked"** (Tải tiện ích đã giải nén).
+5.  **Chọn thư mục:** Tìm đến thư mục `ThayGiap` vừa tải về và chọn `Open`.
+6.  **Ghim biểu tượng:** Nhấn vào biểu tượng mảnh ghép trên Chrome và ghim (Pin) **ThayGiap Learning Tracker** để sử dụng.
+
+---
+
+## 🔐 Bảo Mật & AI Key
+*   Mọi dữ liệu học tập đều được lưu trữ **cục bộ (Local Storage)** trên trình duyệt của bạn, không gửi về server ngoài.
+*   Để sử dụng tính năng AI, bạn cần cung cấp API Key (Gemini hoặc OpenAI) trong phần **Cài đặt AI** của Extension. Google Gemini Pro hiện có gói miễn phí rất tốt cho việc học tập.
+
+---
+
+## 👨‍💻 Tác Giả & Liên Hệ
+
+*   **Tác giả:** Lê Ngọc Tường (HCMUS_DTV)
+*   **Telegram:** [@AstroMindquiz](https://t.me/AstroMindquiz)
+*   **Gmail:** <lengoctuong2005@gmail.com>
+*   **Facebook:** [Lê Ngọc Tường](https://www.facebook.com/ngtu.ong14.11)
+*   **Bản quyền:** © 2026 - Phát triển cho cộng đồng tự học tiếng Anh chủ động.
+
+---
+*Chúc bạn có hành trình chinh phục tiếng Anh thật thú vị cùng ThayGiap Learning Ecosystem!*
